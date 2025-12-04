@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ModuleCard from '../components/ModuleCard';
+import { getModuleProgress } from '../utils/progress';
 
 // Detailed Components
 import ComputerBasicsModule from '../components/ComputerBasicsModule';
@@ -13,6 +14,7 @@ import CppPointersModule from '../components/CppPointersModule';
 
 const LearnPage = () => {
   const [activeModuleId, setActiveModuleId] = useState(null);
+  const [animClass, setAnimClass] = useState('fadeIn');
 
   const modules = [
     {
@@ -89,13 +91,41 @@ const LearnPage = () => {
     }
   ];
 
+  const [progressData, setProgressData] = useState({});
+
+  useEffect(() => {
+    const data = {};
+    modules.forEach(m => {
+      data[m.id] = getModuleProgress(m.id);
+    });
+    setProgressData(data);
+  }, []);
+
+  const handleModuleSelect = (id) => {
+    setAnimClass('fadeOut');
+    setTimeout(() => {
+      setActiveModuleId(id);
+      setAnimClass('fadeIn');
+      window.scrollTo(0, 0);
+    }, 300);
+  };
+
+  const handleBack = () => {
+    setAnimClass('fadeOut');
+    setTimeout(() => {
+      setActiveModuleId(null);
+      setAnimClass('fadeIn');
+      window.scrollTo(0, 0);
+    }, 300);
+  };
+
   // If a module is active, show its detailed component with a back button
   if (activeModuleId) {
     const activeModule = modules.find(m => m.id === activeModuleId);
     return (
-      <div className="min-h-screen pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+      <div className={`min-h-screen pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto transition-container ${animClass}`}>
         <button 
-          onClick={() => setActiveModuleId(null)}
+          onClick={handleBack}
           className="mb-6 flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors font-medium"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -103,7 +133,7 @@ const LearnPage = () => {
           </svg>
           Back to Modules
         </button>
-        <div className="animate-fade-in">
+        <div>
           {activeModule?.component}
         </div>
       </div>
@@ -112,7 +142,7 @@ const LearnPage = () => {
 
   // Default View: Module Grid
   return (
-    <div className="min-h-screen pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+    <div className={`min-h-screen pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto transition-container ${animClass}`}>
       <div className="text-center mb-12">
         <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white mb-4">
           Learning Path
@@ -130,8 +160,8 @@ const LearnPage = () => {
             description={module.description}
             color={module.color}
             icon={module.icon}
-            progress={module.progress}
-            onStart={() => setActiveModuleId(module.id)}
+            progress={progressData[module.id] || 0}
+            onStart={() => handleModuleSelect(module.id)}
           />
         ))}
       </div>

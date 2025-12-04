@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { updateStreak } from './utils/progress';
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [streak, setStreak] = useState(0);
 
   // Handle scroll effect
   useEffect(() => {
@@ -23,6 +25,12 @@ const Navbar = () => {
       document.documentElement.classList.remove('dark');
     }
   }, [isDarkMode]);
+
+  // Initialize Streak
+  useEffect(() => {
+    const currentStreak = updateStreak();
+    setStreak(currentStreak);
+  }, []);
 
   const navLinks = [
     { name: 'Home', path: '/' },
@@ -61,6 +69,12 @@ const Navbar = () => {
               </Link>
             ))}
             
+            {/* Streak Counter */}
+            <div className="flex items-center gap-1.5 px-3 py-1 bg-orange-100 dark:bg-orange-900/30 rounded-full border border-orange-200 dark:border-orange-800/50" title="Current Streak">
+              <span className="text-lg">🔥</span>
+              <span className="font-bold text-orange-600 dark:text-orange-400 text-sm">{streak}</span>
+            </div>
+
             {/* Dark Mode Toggle */}
             <button
               onClick={() => setIsDarkMode(!isDarkMode)}
@@ -85,6 +99,12 @@ const Navbar = () => {
 
           {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center space-x-4">
+            {/* Mobile Streak */}
+            <div className="flex items-center gap-1 px-2 py-1 bg-orange-100 dark:bg-orange-900/30 rounded-full">
+              <span className="text-sm">🔥</span>
+              <span className="font-bold text-orange-600 dark:text-orange-400 text-xs">{streak}</span>
+            </div>
+
              <button
               onClick={() => setIsDarkMode(!isDarkMode)}
               className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"

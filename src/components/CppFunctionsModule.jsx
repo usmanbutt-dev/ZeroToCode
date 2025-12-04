@@ -1,4 +1,5 @@
 import React from 'react';
+import CppFunctionsVisualizer from './visualizers/CppFunctionsVisualizer';
 
 const CppFunctionsModule = () => {
   const topics = [
@@ -82,33 +83,7 @@ const CppFunctionsModule = () => {
 
         {/* Right Visualizer Pane */}
         <div className="lg:w-80 flex-shrink-0">
-          <div className="h-full min-h-[300px] bg-slate-100 dark:bg-slate-900 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-6 flex flex-col items-center justify-center text-center relative overflow-hidden group">
-            
-            {/* Background Decoration */}
-            <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 to-teal-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            
-            <div className="relative z-10 space-y-4">
-              <div className="w-20 h-20 mx-auto bg-white dark:bg-slate-800 rounded-full shadow-lg flex items-center justify-center text-green-500 mb-4">
-                <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                </svg>
-              </div>
-              <div>
-                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Call Stack Visualizer</h4>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Visualize how functions are stacked in memory.
-                </p>
-              </div>
-              <div className="pt-4">
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400">
-                  Preview available
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </span>
-              </div>
-            </div>
-          </div>
+          <CppFunctionsVisualizer />
         </div>
 
       </div>

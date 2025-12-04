@@ -1,4 +1,5 @@
 import React from 'react';
+import CppPointersVisualizer from './visualizers/CppPointersVisualizer';
 
 const CppPointersModule = () => {
   const topics = [
@@ -93,33 +94,7 @@ const CppPointersModule = () => {
 
         {/* Right Visualizer Pane */}
         <div className="lg:w-80 flex-shrink-0">
-          <div className="h-full min-h-[300px] bg-slate-100 dark:bg-slate-900 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-6 flex flex-col items-center justify-center text-center relative overflow-hidden group">
-            
-            {/* Background Decoration */}
-            <div className="absolute inset-0 bg-gradient-to-br from-orange-600/5 to-red-600/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            
-            <div className="relative z-10 space-y-4">
-              <div className="w-20 h-20 mx-auto bg-white dark:bg-slate-800 rounded-full shadow-lg flex items-center justify-center text-orange-600 mb-4">
-                <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                </svg>
-              </div>
-              <div>
-                <h4 className="font-bold text-slate-900 dark:text-white mb-1">Memory Visualizer</h4>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Visualize pointers and memory addresses.
-                </p>
-              </div>
-              <div className="pt-4">
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-orange-600 dark:text-orange-400">
-                  Preview available
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </span>
-              </div>
-            </div>
-          </div>
+          <CppPointersVisualizer />
         </div>
 
       </div>

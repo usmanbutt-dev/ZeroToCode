@@ -1,4 +1,5 @@
 import React from 'react';
+import CppStringsVisualizer from './visualizers/CppStringsVisualizer';
 
 const CppStringsModule = () => {
   const topics = [
@@ -82,33 +83,7 @@ const CppStringsModule = () => {
 
         {/* Right Visualizer Pane */}
         <div className="lg:w-80 flex-shrink-0">
-          <div className="h-full min-h-[300px] bg-slate-100 dark:bg-slate-900 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-6 flex flex-col items-center justify-center text-center relative overflow-hidden group">
-            
-            {/* Background Decoration */}
-            <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-pink-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            
-            <div className="relative z-10 space-y-4">
-              <div className="w-20 h-20 mx-auto bg-white dark:bg-slate-800 rounded-full shadow-lg flex items-center justify-center text-red-500 mb-4">
-                <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
-                </svg>
-              </div>
-              <div>
-                <h4 className="font-bold text-slate-900 dark:text-white mb-1">String Visualizer</h4>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  See how strings are stored in memory.
-                </p>
-              </div>
-              <div className="pt-4">
-                <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400">
-                  Preview available
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </span>
-              </div>
-            </div>
-          </div>
+          <CppStringsVisualizer />
         </div>
 
       </div>
