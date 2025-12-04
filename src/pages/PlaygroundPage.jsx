@@ -44,6 +44,15 @@ int main() {
   const editorRef = useRef(null);
   const containerRef = useRef(null);
 
+  // Load code from localStorage (for Projects integration)
+  useEffect(() => {
+    const savedCode = localStorage.getItem('playgroundCode');
+    if (savedCode) {
+      setCode(savedCode);
+      localStorage.removeItem('playgroundCode'); // Clear after loading
+    }
+  }, []);
+
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
   };
