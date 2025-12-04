@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Pause, SkipBack, SkipForward, RefreshCw, Lock, ArrowRight, Layers, Code, Zap, Gauge, AlertTriangle, Database, Box, Grid3X3, Target, GripVertical } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, RefreshCw, Lock, ArrowRight, Layers, Code, Zap, Gauge, AlertTriangle, Database, Box, Grid3X3, Target, GripVertical, Maximize2, X, Minimize2 } from 'lucide-react';
 
 // Color palette for pointer connections
 const POINTER_COLORS = [
@@ -29,6 +30,16 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
   const [splitPosition, setSplitPosition] = useState(40); // 40% for code, 60% for visualizer
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef(null);
+  
+  // Auto-scaling refs
+  const visualizerContainerRef = useRef(null);
+  const visualizerContentRef = useRef(null);
+  const [scaleFactor, setScaleFactor] = useState(1);
+  
+  // Fullscreen modal state
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const fullscreenContainerRef = useRef(null);
+  const fullscreenContentRef = useRef(null);
 
   // Handle resize drag
   useEffect(() => {
@@ -286,6 +297,24 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
         currentValues[step.name] = targetAddr;
       }
 
+      // Handle array element updates (arr[i] = value)
+      if (step.type === 'array_set') {
+        // Parse array name and index from name like "arr[2]"
+        const match = step.name.match(/^(\w+)\[(\d+)\]$/);
+        if (match) {
+          const arrName = match[1];
+          const idx = parseInt(match[2]);
+          if (currentFrame.variables[arrName] && currentFrame.variables[arrName].type === 'array') {
+            // Update the array value string
+            const arr = currentFrame.variables[arrName];
+            const values = arr.value.replace(/[\[\]]/g, '').split(',').map(v => v.trim());
+            values[idx] = step.value;
+            arr.value = '[' + values.join(',') + ']';
+            currentValues[step.name] = step.value;
+          }
+        }
+      }
+
       if (step.type === 'var' || step.type === 'assign' || step.type === 'const' || step.type === 'reference') {
         const varAddr = normalizeAddr(step.addr);
         newAddrMap[varAddr] = `var-${step.name}`;
@@ -317,6 +346,91 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
     setActiveLine(currentLine);
     setPointerColors(newPointerColors);
   }, [currentStep, traceData]);
+
+  // Auto-scaling with ResizeObserver
+  useEffect(() => {
+    const container = visualizerContainerRef.current;
+    const content = visualizerContentRef.current;
+    if (!container || !content) return;
+
+    const calculateScale = () => {
+      // Reset scale to measure natural size
+      content.style.transform = 'scale(1)';
+      
+      const containerHeight = container.clientHeight - 32; // Account for padding
+      const containerWidth = container.clientWidth - 32;
+      const contentHeight = content.scrollHeight;
+      const contentWidth = content.scrollWidth;
+      
+      if (contentHeight === 0 || contentWidth === 0) return;
+
+      // Calculate scale to fit both dimensions
+      const scaleY = contentHeight > containerHeight ? containerHeight / contentHeight : 1;
+      const scaleX = contentWidth > containerWidth ? containerWidth / contentWidth : 1;
+      let newScale = Math.min(scaleX, scaleY, 1); // Never scale up, only down
+      newScale = Math.max(0.4, newScale); // Minimum 40% scale for readability
+      
+      content.style.transform = `scale(${newScale})`;
+      setScaleFactor(newScale);
+    };
+
+    // Initial calculation
+    const timeoutId = setTimeout(calculateScale, 50);
+
+    // Watch for container resize
+    const resizeObserver = new ResizeObserver(() => {
+      calculateScale();
+    });
+    resizeObserver.observe(container);
+
+    return () => {
+      clearTimeout(timeoutId);
+      resizeObserver.disconnect();
+    };
+  }, [stackFrames, heapMemory, splitPosition]);
+
+  // Auto-scaling for fullscreen view
+  useEffect(() => {
+    if (!isFullscreen) return;
+    
+    const container = fullscreenContainerRef.current;
+    const content = fullscreenContentRef.current;
+    if (!container || !content) return;
+
+    const calculateFullscreenScale = () => {
+      // Reset scale to measure natural size
+      content.style.transform = 'scale(1)';
+      
+      const containerHeight = container.clientHeight - 48; // Account for padding
+      const containerWidth = container.clientWidth - 48;
+      const contentHeight = content.scrollHeight;
+      const contentWidth = content.scrollWidth;
+      
+      if (contentHeight === 0 || contentWidth === 0) return;
+
+      // Calculate scale to fit both dimensions
+      const scaleY = contentHeight > containerHeight ? containerHeight / contentHeight : 1;
+      const scaleX = contentWidth > containerWidth ? containerWidth / contentWidth : 1;
+      let newScale = Math.min(scaleX, scaleY, 1); // Never scale up, only down
+      newScale = Math.max(0.5, newScale); // Minimum 50% scale for fullscreen
+      
+      content.style.transform = `scale(${newScale})`;
+    };
+
+    // Initial calculation with delay for DOM to render
+    const timeoutId = setTimeout(calculateFullscreenScale, 100);
+
+    // Watch for container resize
+    const resizeObserver = new ResizeObserver(() => {
+      calculateFullscreenScale();
+    });
+    resizeObserver.observe(container);
+
+    return () => {
+      clearTimeout(timeoutId);
+      resizeObserver.disconnect();
+    };
+  }, [isFullscreen, stackFrames, heapMemory]);
 
   // Auto-play
   useEffect(() => {
@@ -355,6 +469,15 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
           e.preventDefault();
           setCurrentStep(0);
           setIsPlaying(false);
+          break;
+        case 'Escape':
+          e.preventDefault();
+          setIsFullscreen(false);
+          break;
+        case 'f':
+        case 'F':
+          e.preventDefault();
+          setIsFullscreen(prev => !prev);
           break;
       }
     };
@@ -494,6 +617,26 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
           </div>
         )}
 
+        {/* Visualizer Header with Expand Button */}
+        <div className="bg-slate-100 dark:bg-slate-800 px-4 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-slate-500" />
+            <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Memory Visualization</span>
+            {scaleFactor < 1 && (
+              <span className="text-xs text-slate-400 bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded">
+                {Math.round(scaleFactor * 100)}%
+              </span>
+            )}
+          </div>
+          <button
+            onClick={() => setIsFullscreen(true)}
+            className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            title="Expand to Fullscreen (F)"
+          >
+            <Maximize2 className="w-4 h-4 text-slate-500" />
+          </button>
+        </div>
+
         {/* Step Explanation */}
         {stepExplanation && (
           <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 px-4 py-3 border-b border-slate-200 dark:border-slate-700">
@@ -504,9 +647,12 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
           </div>
         )}
 
-        {/* Memory Visualization */}
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="flex flex-col gap-6 p-2">
+        {/* Memory Visualization - Auto-scaling container */}
+        <div ref={visualizerContainerRef} className="flex-1 overflow-hidden p-4 relative">
+          <div 
+            ref={visualizerContentRef}
+            className="flex flex-col gap-4 origin-top-left transition-transform duration-150"
+          >
             
             {/* HEAP */}
             {Object.keys(heapMemory).length > 0 && (
@@ -705,6 +851,282 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
           />
         </div>
       </div>
+
+      {/* Fullscreen Modal Overlay - Rendered via Portal to be above navbar */}
+      {isFullscreen && ReactDOM.createPortal(
+        <AnimatePresence>
+          <motion.div
+            key="fullscreen-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/95 flex items-center justify-center p-4"
+            style={{ zIndex: 99999 }}
+            onClick={(e) => e.target === e.currentTarget && setIsFullscreen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="w-full h-full max-w-[98vw] max-h-[98vh] bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-slate-200 dark:border-white/10"
+            >
+              {/* Fullscreen Header */}
+              <div className="bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 px-8 py-5 flex items-center justify-between shadow-lg">
+                <div className="flex items-center gap-4">
+                  <div className="p-2 bg-white/20 rounded-xl backdrop-blur-sm">
+                    <Layers className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <span className="text-xl font-bold text-white">Memory Visualization</span>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-sm text-purple-200 bg-white/10 px-3 py-0.5 rounded-full">Step {currentStep + 1} / {traceData?.length || 0}</span>
+                      {activeLine && <span className="text-sm text-purple-200">Line {activeLine}</span>}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setIsFullscreen(false)}
+                    className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-all text-white backdrop-blur-sm"
+                    title="Minimize"
+                  >
+                    <Minimize2 className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => setIsFullscreen(false)}
+                    className="p-2.5 bg-red-500/80 hover:bg-red-500 rounded-xl transition-all text-white"
+                    title="Close (Esc)"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Memory Leak Warning in Fullscreen */}
+              {memoryLeaks.length > 0 && currentStep === (traceData?.length || 0) - 1 && (
+                <div className="bg-gradient-to-r from-red-500/20 to-orange-500/20 px-8 py-4 border-b border-red-500/30">
+                  <div className="flex items-center gap-3 text-red-400">
+                    <div className="p-2 bg-red-500/20 rounded-lg">
+                      <AlertTriangle className="w-5 h-5" />
+                    </div>
+                    <span className="font-bold text-lg">Memory Leak Detected!</span>
+                    <span className="text-red-300 bg-red-500/20 px-3 py-1 rounded-full text-sm">Not freed: {memoryLeaks.join(', ')}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Step Explanation in Fullscreen */}
+              {stepExplanation && (
+                <div className="bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-500/10 dark:to-blue-500/10 px-8 py-4 border-b border-cyan-200 dark:border-cyan-500/20">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-cyan-100 dark:bg-cyan-500/20 rounded-lg">
+                      <Zap className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
+                    </div>
+                    <span className="text-base font-medium text-slate-700 dark:text-slate-200">{stepExplanation}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Fullscreen Memory Visualization */}
+              <div ref={fullscreenContainerRef} className="flex-1 overflow-hidden p-8 bg-gradient-to-br from-slate-100 to-slate-50 dark:from-slate-800/50 dark:to-slate-900/50">
+                <div ref={fullscreenContentRef} className="flex flex-col gap-8 origin-top-left transition-transform duration-150">
+                  {/* HEAP in Fullscreen */}
+                  {Object.keys(heapMemory).length > 0 && (
+                    <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-500/10 dark:to-orange-500/10 rounded-3xl border border-amber-200 dark:border-amber-500/30 p-8">
+                      <div className="flex items-center gap-3 mb-6 border-b border-amber-200 dark:border-amber-500/20 pb-4">
+                        <div className="p-2 bg-amber-100 dark:bg-amber-500/20 rounded-xl">
+                          <Database className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                        </div>
+                        <span className="font-mono font-bold text-xl text-amber-700 dark:text-amber-300">HEAP MEMORY</span>
+                        <span className="text-sm text-amber-600 dark:text-amber-400/60 bg-amber-100 dark:bg-amber-500/10 px-3 py-1 rounded-full ml-auto">{Object.keys(heapMemory).length} allocations</span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {Object.entries(heapMemory).map(([addr, data]) => {
+                          const color = POINTER_COLORS[pointerColors[data.name]] || POINTER_COLORS[0];
+                          return (
+                            <div
+                              key={addr}
+                              className={`p-5 rounded-2xl border-2 shadow-xl bg-white dark:bg-slate-800/80 ${color.border} ${data.freed ? 'opacity-40 grayscale' : ''}`}
+                            >
+                              <div className="flex justify-between items-center mb-4">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-4 h-4 rounded-full ${color.dot} shadow-lg`} />
+                                  <span className="font-bold font-mono text-2xl text-slate-800 dark:text-white">{data.name}</span>
+                                </div>
+                                {data.freed && <span className="text-sm bg-red-100 dark:bg-red-500/30 text-red-600 dark:text-red-300 px-3 py-1 rounded-full">FREED</span>}
+                              </div>
+                              {data.type === 'array' ? (
+                                <div className="flex gap-3 flex-wrap">
+                                  {data.value.replace(/[\[\]]/g, '').split(',').map((val, idx) => (
+                                    <div key={idx} className={`w-14 h-14 flex items-center justify-center rounded-xl border-2 font-mono text-lg font-bold ${color.bg} ${color.border} shadow-lg`}>
+                                      {val.trim()}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className={`font-mono text-3xl font-bold ${color.text}`}>{data.value}</div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STACK in Fullscreen */}
+                  {stackFrames.map((frame, index) => (
+                    <div
+                      key={frame.name + index}
+                      className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-500/10 dark:to-purple-500/10 rounded-3xl border border-indigo-200 dark:border-indigo-500/30 p-8"
+                    >
+                      <div className="flex items-center gap-3 mb-6 border-b border-indigo-200 dark:border-indigo-500/20 pb-4">
+                        <div className="p-2 bg-indigo-100 dark:bg-indigo-500/20 rounded-xl">
+                          <Layers className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                        </div>
+                        <span className="font-mono font-bold text-xl text-indigo-700 dark:text-indigo-300">{frame.name}()</span>
+                        <span className="text-sm text-indigo-600 dark:text-indigo-400/60 bg-indigo-100 dark:bg-indigo-500/10 px-3 py-1 rounded-full ml-auto">Stack Frame</span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                        {Object.entries(frame.variables).map(([name, data]) => {
+                          const hasChanged = previousValues[name] !== undefined && previousValues[name] !== data.value;
+                          const color = data.type === 'pointer' ? POINTER_COLORS[data.colorIndex] : null;
+                          const targetColor = getTargetColor(name);
+                          
+                          const getBorderColor = () => {
+                            if (data.type === 'pointer' && color) return color.border;
+                            if (targetColor) return targetColor.border;
+                            if (data.type === 'array') return 'border-emerald-500';
+                            if (data.type === 'array2d') return 'border-teal-500';
+                            if (data.type === 'struct') return 'border-pink-500';
+                            if (data.type === 'constant') return 'border-rose-500';
+                            return 'border-sky-500';
+                          };
+                          
+                          return (
+                            <div
+                              key={name}
+                              className={`p-5 rounded-2xl border-2 shadow-xl bg-white dark:bg-slate-800/80 transition-all ${hasChanged ? 'ring-2 ring-yellow-400 ring-offset-2 ring-offset-white dark:ring-offset-slate-900' : ''} ${getBorderColor()}`}
+                            >
+                              <div className="flex justify-between items-center mb-4">
+                                <div className="flex items-center gap-3">
+                                  {data.type === 'pointer' && color && <div className={`w-4 h-4 rounded-full ${color.dot} shadow-lg`} />}
+                                  {targetColor && <div className={`w-4 h-4 rounded-full ${targetColor.dot} shadow-lg`} />}
+                                  <span className="font-bold font-mono text-xl text-slate-800 dark:text-white">{name}</span>
+                                  {data.type === 'constant' && <Lock className="w-4 h-4 text-rose-500 dark:text-rose-400" />}
+                                </div>
+                                <span className="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700/50 px-2.5 py-1 rounded-full">
+                                  {data.type}
+                                </span>
+                              </div>
+
+                              {data.type === 'array' ? (
+                                <div className="flex gap-2 flex-wrap">
+                                  {data.value.replace(/[\[\]]/g, '').split(',').map((val, idx) => {
+                                    const cellColor = getTargetColor(name, idx);
+                                    return (
+                                      <div key={idx} className="flex flex-col items-center">
+                                        <div className={`w-12 h-12 flex items-center justify-center rounded-lg border-2 font-mono text-lg ${
+                                          cellColor ? `${cellColor.bg} ${cellColor.border}` : 'bg-slate-100 dark:bg-slate-700 border-slate-300'
+                                        }`}>
+                                          {val.trim()}
+                                        </div>
+                                        <span className="text-xs text-slate-400 mt-1">{idx}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : data.type === 'array2d' ? (
+                                render2DArray(name, data)
+                              ) : data.type === 'struct' ? (
+                                renderStruct(name, data)
+                              ) : data.type === 'pointer' ? (
+                                <div className="flex flex-col gap-2">
+                                  {data.dangling ? (
+                                    <div className="flex items-center gap-2 text-red-500">
+                                      <span className="text-2xl">💀</span>
+                                      <span className="font-bold">DANGLING (freed)</span>
+                                    </div>
+                                  ) : addressMap[data.value] ? (
+                                    <div className={`flex items-center gap-2 ${color?.text || 'text-purple-600'}`}>
+                                      <Target className="w-5 h-5" />
+                                      <span className="font-mono font-bold text-lg">
+                                        → {getTargetDisplayName(data.value, addressMap)}
+                                      </span>
+                                      <span className="text-slate-400">({data.deref})</span>
+                                    </div>
+                                  ) : data.value === '0x0' || data.value === '(nil)' ? (
+                                    <div className="flex items-center gap-2 text-gray-500">
+                                      <span className="text-2xl">∅</span>
+                                      <span className="font-bold">NULL</span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-2 text-orange-500">
+                                      <span className="text-2xl">⚠️</span>
+                                      <span className="font-bold">INVALID</span>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="font-mono text-2xl font-bold text-slate-800 dark:text-slate-100">
+                                  {data.value}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Fullscreen Controls */}
+              <div className="bg-gradient-to-r from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 p-5 border-t border-slate-200 dark:border-white/10">
+                <div className="flex items-center justify-center gap-6 mb-4">
+                  <div className="flex items-center gap-3 bg-white dark:bg-slate-700/50 px-4 py-2 rounded-xl shadow-sm">
+                    <Gauge className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    <span className="text-sm text-slate-700 dark:text-slate-300">{playbackSpeed}x</span>
+                    <input 
+                      type="range" min="0.25" max="4" step="0.25" value={playbackSpeed} 
+                      onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))}
+                      className="w-24 h-2 accent-purple-500"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setCurrentStep(0)} className="p-3 bg-white dark:bg-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-600/50 rounded-xl transition-all text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white shadow-sm" title="Reset (R)">
+                      <RefreshCw className="w-5 h-5" />
+                    </button>
+                    <button onClick={() => setCurrentStep(Math.max(0, currentStep - 1))} className="p-3 bg-white dark:bg-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-600/50 rounded-xl transition-all text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white shadow-sm" title="Previous (←)">
+                      <SkipBack className="w-5 h-5" />
+                    </button>
+                    <button onClick={() => setIsPlaying(!isPlaying)} className="px-6 py-3 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white rounded-xl transition-all shadow-lg" title="Play/Pause (Space)">
+                      {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6" />}
+                    </button>
+                    <button onClick={() => setCurrentStep(Math.min((traceData?.length || 1) - 1, currentStep + 1))} className="p-3 bg-white dark:bg-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-600/50 rounded-xl transition-all text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white shadow-sm" title="Next (→)">
+                      <SkipForward className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="relative">
+                  <input 
+                    type="range" min="0" max={Math.max(0, (traceData?.length || 1) - 1)} value={currentStep} 
+                    onChange={(e) => { setIsPlaying(false); setCurrentStep(parseInt(e.target.value)); }} 
+                    className="w-full h-2 bg-slate-300 dark:bg-slate-700 rounded-lg accent-purple-500 cursor-pointer"
+                  />
+                  <div 
+                    className="absolute top-0 left-0 h-2 bg-gradient-to-r from-violet-500 to-purple-500 rounded-lg pointer-events-none"
+                    style={{ width: `${(currentStep / Math.max(1, (traceData?.length || 1) - 1)) * 100}%` }}
+                  />
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>,
+        document.body
+      )}
     </div>
   );
 };

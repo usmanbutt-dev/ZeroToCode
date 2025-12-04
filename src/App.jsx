@@ -6,6 +6,8 @@ import LearnPage from './pages/LearnPage';
 import PlaygroundPage from './pages/PlaygroundPage';
 import ProjectsPage from './pages/ProjectsPage';
 import AboutPage from './pages/AboutPage';
+import SignInPage from './pages/SignInPage';
+import SignUpPage from './pages/SignUpPage';
 import PageTransition from './components/PageTransition';
 
 const AnimatedRoutes = () => {
@@ -19,6 +21,8 @@ const AnimatedRoutes = () => {
         <Route path="/playground" element={<PlaygroundPage />} />
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/about" element={<AboutPage />} />
+        <Route path="/signin" element={<SignInPage />} />
+        <Route path="/signup" element={<SignUpPage />} />
       </Routes>
     </PageTransition>
   );
@@ -36,3 +40,4 @@ function App() {
 }
 
 export default App;
+

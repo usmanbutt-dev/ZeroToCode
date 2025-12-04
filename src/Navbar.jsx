@@ -92,9 +92,18 @@ const Navbar = () => {
               )}
             </button>
 
-            <button className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-full font-medium transition-all shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40">
+            <Link 
+              to="/signin"
+              className="text-slate-600 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 font-medium transition-colors"
+            >
               Sign In
-            </button>
+            </Link>
+            <Link 
+              to="/signup"
+              className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-5 py-2 rounded-full font-medium transition-all shadow-lg shadow-violet-500/30 hover:shadow-violet-500/40"
+            >
+              Sign Up
+            </Link>
           </div>
 
           {/* Mobile Menu Button */}
@@ -149,10 +158,21 @@ const Navbar = () => {
                 {link.name}
               </Link>
             ))}
-            <div className="pt-4">
-              <button className="w-full bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl font-medium transition-all shadow-lg shadow-blue-500/30">
+            <div className="pt-4 space-y-2">
+              <Link 
+                to="/signin"
+                className="block w-full text-center px-5 py-3 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium transition-all hover:bg-slate-50 dark:hover:bg-slate-800"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
                 Sign In
-              </button>
+              </Link>
+              <Link 
+                to="/signup"
+                className="block w-full text-center bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-5 py-3 rounded-xl font-medium transition-all shadow-lg shadow-violet-500/30"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Sign Up
+              </Link>
             </div>
           </div>
         </div>
