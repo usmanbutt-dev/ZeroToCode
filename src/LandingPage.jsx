@@ -1,12 +1,9 @@
 import React from 'react';
-import Navbar from './Navbar';
 import FeatureCard from './FeatureCard';
 
 const LandingPage = () => {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
-      <Navbar />
-
       {/* Hero Section */}
       <section className="pt-32 pb-20 lg:pt-48 lg:pb-32 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
         <div className="grid lg:grid-cols-2 gap-12 items-center">

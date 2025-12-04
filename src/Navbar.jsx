@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -24,11 +25,11 @@ const Navbar = () => {
   }, [isDarkMode]);
 
   const navLinks = [
-    { name: 'Home', href: '#' },
-    { name: 'Learn', href: '#learn' },
-    { name: 'Playground', href: '#playground' },
-    { name: 'Projects', href: '#projects' },
-    { name: 'About', href: '#about' },
+    { name: 'Home', path: '/' },
+    { name: 'Learn', path: '/learn' },
+    { name: 'Playground', path: '/playground' },
+    { name: 'Projects', path: '/projects' },
+    { name: 'About', path: '/about' },
   ];
 
   return (
@@ -43,21 +44,21 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center">
-            <span className="text-2xl font-bold font-heading bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+            <Link to="/" className="text-2xl font-bold font-heading bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
               ZeroToCode
-            </span>
+            </Link>
           </div>
 
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center space-x-8">
             {navLinks.map((link) => (
-              <a
+              <Link
                 key={link.name}
-                href={link.href}
+                to={link.path}
                 className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 font-medium transition-colors"
               >
                 {link.name}
-              </a>
+              </Link>
             ))}
             
             {/* Dark Mode Toggle */}
@@ -119,14 +120,14 @@ const Navbar = () => {
         <div className="md:hidden bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
           <div className="px-4 pt-2 pb-6 space-y-2">
             {navLinks.map((link) => (
-              <a
+              <Link
                 key={link.name}
-                href={link.href}
+                to={link.path}
                 className="block px-3 py-2 text-base font-medium text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 {link.name}
-              </a>
+              </Link>
             ))}
             <div className="pt-4">
               <button className="w-full bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl font-medium transition-all shadow-lg shadow-blue-500/30">
