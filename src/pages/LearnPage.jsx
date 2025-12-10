@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { getModuleProgress } from '../utils/progress';
-import { BookOpen, Clock, CheckCircle, ChevronRight, ArrowLeft, Sparkles, Target, Lock, Play } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { BookOpen, Clock, CheckCircle, ChevronRight, ArrowLeft, Sparkles, Target, Lock, Play, Trophy, Zap } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { completeLesson } from '../utils/userProgress';
+import { staggerContainer, staggerItem, fadeInUp, viewportOnce } from '../utils/animationVariants';
 
 // Detailed Components
 import ComputerBasicsModule from '../components/ComputerBasicsModule';
@@ -14,11 +17,15 @@ import CppPointersModule from '../components/CppPointersModule';
 
 const LearnPage = () => {
   const [activeModuleId, setActiveModuleId] = useState(null);
-  const [animClass, setAnimClass] = useState('fadeIn');
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [completionMessage, setCompletionMessage] = useState(null);
+  
+  const { currentUser, userData } = useAuth();
 
   const modules = [
     {
       id: 1,
+      moduleKey: 'module1',
       title: "Computer Basics",
       description: "Learn how computers work, what hardware/software is, and how files are organized.",
       gradient: "from-blue-500 to-cyan-500",
@@ -31,6 +38,7 @@ const LearnPage = () => {
     },
     {
       id: 2,
+      moduleKey: 'module2',
       title: "Logic Building",
       description: "Build problem-solving skills using sequences, conditions, loops, and flowcharts.",
       gradient: "from-green-500 to-emerald-500",
@@ -43,6 +51,7 @@ const LearnPage = () => {
     },
     {
       id: 3,
+      moduleKey: 'module3',
       title: "C++ Fundamentals",
       description: "Learn basic C++ syntax, variables, input/output, and simple programs.",
       gradient: "from-orange-500 to-amber-500",
@@ -55,47 +64,51 @@ const LearnPage = () => {
     },
     {
       id: 4,
+      moduleKey: 'module4',
       title: "Control Flow",
       description: "Master decision-making in C++ using if/else, switch, and loops.",
       gradient: "from-purple-500 to-violet-500",
       bgLight: "bg-purple-50 dark:bg-purple-900/20",
       borderColor: "border-purple-200 dark:border-purple-800",
       icon: "🔀",
-      lessons: 7,
+      lessons: 6,
       time: "50 min",
       component: <CppControlFlowModule />
     },
     {
       id: 5,
+      moduleKey: 'module5',
       title: "Functions",
-      description: "Learn to create reusable code blocks using parameters, return values, and scope rules.",
-      gradient: "from-teal-500 to-cyan-500",
-      bgLight: "bg-teal-50 dark:bg-teal-900/20",
-      borderColor: "border-teal-200 dark:border-teal-800",
-      icon: "🔧",
-      lessons: 6,
-      time: "45 min",
+      description: "Create reusable code with functions, parameters, and return values.",
+      gradient: "from-rose-500 to-pink-500",
+      bgLight: "bg-rose-50 dark:bg-rose-900/20",
+      borderColor: "border-rose-200 dark:border-rose-800",
+      icon: "🧩",
+      lessons: 7,
+      time: "55 min",
       component: <CppFunctionsModule />
     },
     {
       id: 6,
+      moduleKey: 'module6',
       title: "Arrays",
-      description: "Store and process multiple values using 1D and 2D arrays.",
-      gradient: "from-indigo-500 to-blue-500",
-      bgLight: "bg-indigo-50 dark:bg-indigo-900/20",
-      borderColor: "border-indigo-200 dark:border-indigo-800",
-      icon: "📦",
-      lessons: 5,
-      time: "40 min",
+      description: "Work with collections of data using arrays and basic algorithms.",
+      gradient: "from-teal-500 to-cyan-500",
+      bgLight: "bg-teal-50 dark:bg-teal-900/20",
+      borderColor: "border-teal-200 dark:border-teal-800",
+      icon: "📊",
+      lessons: 6,
+      time: "50 min",
       component: <CppArraysModule />
     },
     {
       id: 7,
+      moduleKey: 'module7',
       title: "Strings",
-      description: "Handle text in C++ using character arrays and std::string.",
-      gradient: "from-rose-500 to-pink-500",
-      bgLight: "bg-rose-50 dark:bg-rose-900/20",
-      borderColor: "border-rose-200 dark:border-rose-800",
+      description: "Manipulate text with string operations, searching, and formatting.",
+      gradient: "from-indigo-500 to-blue-500",
+      bgLight: "bg-indigo-50 dark:bg-indigo-900/20",
+      borderColor: "border-indigo-200 dark:border-indigo-800",
       icon: "📝",
       lessons: 5,
       time: "35 min",
@@ -103,6 +116,7 @@ const LearnPage = () => {
     },
     {
       id: 8,
+      moduleKey: 'module8',
       title: "Pointers",
       description: "Understand memory addresses, dereferencing, and dynamic memory basics.",
       gradient: "from-amber-500 to-orange-500",
@@ -115,86 +129,193 @@ const LearnPage = () => {
     }
   ];
 
-  const [progressData, setProgressData] = useState({});
-
-  useEffect(() => {
-    const data = {};
-    modules.forEach(m => {
-      data[m.id] = getModuleProgress(m.id);
-    });
-    setProgressData(data);
-  }, []);
+  // Get completed lessons from Firebase userData
+  const completedLessons = userData?.completedLessons || {};
+  
+  // Calculate progress data based on Firebase data
+  const progressData = {};
+  modules.forEach(m => {
+    progressData[m.id] = completedLessons[m.moduleKey] ? 100 : 0;
+  });
 
   const handleModuleSelect = (id) => {
-    setAnimClass('fadeOut');
-    setTimeout(() => {
-      setActiveModuleId(id);
-      setAnimClass('fadeIn');
-      window.scrollTo(0, 0);
-    }, 300);
+    setActiveModuleId(id);
+    window.scrollTo(0, 0);
   };
 
   const handleBack = () => {
-    setAnimClass('fadeOut');
-    setTimeout(() => {
-      setActiveModuleId(null);
-      setAnimClass('fadeIn');
-      window.scrollTo(0, 0);
-    }, 300);
+    setCompletionMessage(null);
+    setActiveModuleId(null);
+    window.scrollTo(0, 0);
+  };
+
+  const handleCompleteModule = async (moduleKey) => {
+    if (!currentUser) {
+      setCompletionMessage({ type: 'info', text: 'Sign in to save your progress!' });
+      return;
+    }
+    
+    setIsCompleting(true);
+    const result = await completeLesson(currentUser.uid, moduleKey);
+    setIsCompleting(false);
+    
+    if (result.success) {
+      if (result.alreadyCompleted) {
+        setCompletionMessage({ type: 'info', text: 'You\'ve already completed this module!' });
+      } else {
+        setCompletionMessage({ 
+          type: 'success', 
+          text: `🎉 Module completed! +${result.xpAwarded} XP earned!`,
+          xp: result.xpAwarded
+        });
+      }
+    } else {
+      setCompletionMessage({ type: 'error', text: 'Failed to save progress. Try again!' });
+    }
   };
 
   // Calculate overall progress
   const totalProgress = Object.values(progressData).reduce((a, b) => a + b, 0) / modules.length;
-  const completedModules = Object.values(progressData).filter(p => p === 100).length;
+  const completedModulesCount = Object.values(progressData).filter(p => p === 100).length;
 
   // Active module view
   if (activeModuleId) {
     const activeModule = modules.find(m => m.id === activeModuleId);
+    const isModuleCompleted = completedLessons[activeModule?.moduleKey];
+    
     return (
-      <div className={`min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto transition-container ${animClass}`}>
-        <button 
-          onClick={handleBack}
-          className="mb-6 flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300 transition-all font-medium shadow-sm"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Learning Path
-        </button>
+      <motion.div 
+        className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -20 }}
+        transition={{ duration: 0.3 }}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <motion.button 
+            onClick={handleBack}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-300 transition-all font-medium shadow-sm w-fit"
+            whileHover={{ x: -4 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to Learning Path
+          </motion.button>
+          
+          {currentUser && (
+            <motion.button 
+              onClick={() => handleCompleteModule(activeModule?.moduleKey)}
+              disabled={isCompleting || isModuleCompleted}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-xl font-semibold transition-all shadow-lg w-fit ${
+                isModuleCompleted 
+                  ? 'bg-green-500 text-white cursor-default'
+                  : 'bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white shadow-emerald-500/30'
+              } disabled:opacity-70`}
+              whileHover={!isModuleCompleted ? { scale: 1.02, y: -2 } : {}}
+              whileTap={!isModuleCompleted ? { scale: 0.98 } : {}}
+            >
+              {isCompleting ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : isModuleCompleted ? (
+                <>
+                  <CheckCircle className="w-5 h-5" />
+                  Completed!
+                </>
+              ) : (
+                <>
+                  <Trophy className="w-5 h-5" />
+                  Mark as Complete
+                </>
+              )}
+            </motion.button>
+          )}
+        </div>
+        
+        {/* Completion Message */}
+        <AnimatePresence>
+          {completionMessage && (
+            <motion.div 
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              className={`mb-6 p-4 rounded-xl flex items-center gap-3 ${
+                completionMessage.type === 'success' 
+                  ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
+                  : completionMessage.type === 'error'
+                  ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+                  : 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+              }`}
+            >
+              {completionMessage.type === 'success' && <Zap className="w-5 h-5 text-yellow-500" />}
+              <span className="font-medium">{completionMessage.text}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+        
         <div>
           {activeModule?.component}
         </div>
-      </div>
+      </motion.div>
     );
   }
 
   // Main Learning Path View
   return (
-    <div className={`min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 pt-24 pb-12 px-4 sm:px-6 lg:px-8 transition-container ${animClass}`}>
+    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 pt-24 pb-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto">
         
-        {/* Header */}
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-blue-900/40 dark:to-indigo-900/40 rounded-full border border-blue-200 dark:border-blue-800 mb-6">
+        {/* Header - Animated */}
+        <motion.div 
+          className="text-center mb-10"
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <motion.div 
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-100 to-indigo-100 dark:from-blue-900/40 dark:to-indigo-900/40 rounded-full border border-blue-200 dark:border-blue-800 mb-6"
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2 }}
+          >
             <BookOpen className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">8 Modules • Beginner Friendly</span>
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-slate-900 dark:text-white mb-4">
+          </motion.div>
+          <motion.h1 
+            className="text-4xl md:text-5xl font-bold text-slate-900 dark:text-white mb-4"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
             Your Learning <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Path</span>
-          </h1>
-          <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+          </motion.h1>
+          <motion.p 
+            className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+          >
             Master C++ programming from zero to hero. Track your progress as you complete each module.
-          </p>
-        </div>
+          </motion.p>
+        </motion.div>
 
-        {/* Progress Overview Card */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 mb-10 border border-slate-200 dark:border-slate-700 shadow-lg">
+        {/* Progress Overview Card - Animated */}
+        <motion.div 
+          className="bg-white dark:bg-slate-800 rounded-2xl p-6 mb-10 border border-slate-200 dark:border-slate-700 shadow-lg"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4, duration: 0.5 }}
+        >
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+              <motion.div 
+                className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/30"
+                whileHover={{ scale: 1.1, rotate: 5 }}
+              >
                 <Target className="w-8 h-8 text-white" />
-              </div>
+              </motion.div>
               <div>
                 <h2 className="text-xl font-bold text-slate-900 dark:text-white">Overall Progress</h2>
-                <p className="text-slate-500 dark:text-slate-400">{completedModules} of {modules.length} modules completed</p>
+                <p className="text-slate-500 dark:text-slate-400">{completedModulesCount} of {modules.length} modules completed</p>
               </div>
             </div>
             
@@ -204,30 +325,51 @@ const LearnPage = () => {
                 <span className="text-blue-600 dark:text-blue-400">{Math.round(totalProgress)}%</span>
               </div>
               <div className="w-full bg-slate-100 dark:bg-slate-700 h-3 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-500"
-                  style={{ width: `${totalProgress}%` }}
+                <motion.div 
+                  className="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${totalProgress}%` }}
+                  transition={{ delay: 0.6, duration: 1, ease: "easeOut" }}
                 />
               </div>
             </div>
 
             <div className="flex gap-6">
               <div className="text-center">
-                <div className="text-2xl font-bold text-slate-900 dark:text-white">{modules.reduce((a, m) => a + m.lessons, 0)}</div>
+                <motion.div 
+                  className="text-2xl font-bold text-slate-900 dark:text-white"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.7 }}
+                >
+                  {modules.reduce((a, m) => a + m.lessons, 0)}
+                </motion.div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">Total Lessons</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-slate-900 dark:text-white">~6h</div>
+                <motion.div 
+                  className="text-2xl font-bold text-slate-900 dark:text-white"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.8 }}
+                >
+                  ~6h
+                </motion.div>
                 <div className="text-xs text-slate-500 dark:text-slate-400">Total Time</div>
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        {/* Learning Path - Visual Timeline */}
+        {/* Learning Path - Visual Timeline with Animations */}
         <div className="relative">
           {/* Vertical line connector */}
-          <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-500 via-purple-500 to-orange-500 hidden md:block" />
+          <motion.div 
+            className="absolute left-8 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-500 via-purple-500 to-orange-500 hidden md:block origin-top"
+            initial={{ scaleY: 0 }}
+            animate={{ scaleY: 1 }}
+            transition={{ delay: 0.5, duration: 1.5 }}
+          />
           
           <div className="space-y-4">
             {modules.map((module, index) => {
@@ -236,19 +378,27 @@ const LearnPage = () => {
               const isLocked = index > 0 && (progressData[modules[index - 1].id] || 0) < 50;
               
               return (
-                <div 
+                <motion.div 
                   key={module.id}
                   className={`relative flex gap-4 md:gap-6 ${isLocked ? 'opacity-60' : ''}`}
+                  initial={{ opacity: 0, x: -30 }}
+                  whileInView={{ opacity: isLocked ? 0.6 : 1, x: 0 }}
+                  viewport={{ once: true, margin: "-50px" }}
+                  transition={{ delay: index * 0.1, duration: 0.4 }}
                 >
                   {/* Step Number Circle */}
                   <div className="relative z-10 flex-shrink-0">
-                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-lg transition-transform hover:scale-110 ${
-                      isCompleted 
-                        ? 'bg-gradient-to-br from-green-500 to-emerald-600' 
-                        : isLocked
-                          ? 'bg-slate-200 dark:bg-slate-700'
-                          : `bg-gradient-to-br ${module.gradient}`
-                    }`}>
+                    <motion.div 
+                      className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-lg ${
+                        isCompleted 
+                          ? 'bg-gradient-to-br from-green-500 to-emerald-600' 
+                          : isLocked
+                            ? 'bg-slate-200 dark:bg-slate-700'
+                            : `bg-gradient-to-br ${module.gradient}`
+                      }`}
+                      whileHover={!isLocked ? { scale: 1.1 } : {}}
+                      transition={{ type: "spring", stiffness: 300 }}
+                    >
                       {isCompleted ? (
                         <CheckCircle className="w-8 h-8 text-white" />
                       ) : isLocked ? (
@@ -256,17 +406,19 @@ const LearnPage = () => {
                       ) : (
                         <span>{module.icon}</span>
                       )}
-                    </div>
+                    </motion.div>
                   </div>
 
                   {/* Module Card */}
-                  <div 
+                  <motion.div 
                     onClick={() => !isLocked && handleModuleSelect(module.id)}
                     className={`flex-1 bg-white dark:bg-slate-800 rounded-2xl p-5 border-2 transition-all cursor-pointer ${
                       isLocked 
                         ? 'border-slate-200 dark:border-slate-700 cursor-not-allowed' 
-                        : `${module.borderColor} hover:shadow-xl hover:-translate-y-1`
+                        : `${module.borderColor} hover:shadow-xl`
                     }`}
+                    whileHover={!isLocked ? { y: -4, scale: 1.01 } : {}}
+                    whileTap={!isLocked ? { scale: 0.99 } : {}}
                   >
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="flex-1">
@@ -275,9 +427,14 @@ const LearnPage = () => {
                             Module {index + 1}
                           </span>
                           {isCompleted && (
-                            <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                            <motion.span 
+                              className="px-2 py-0.5 rounded-md text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                              initial={{ scale: 0 }}
+                              animate={{ scale: 1 }}
+                              transition={{ type: "spring" }}
+                            >
                               ✓ Completed
-                            </span>
+                            </motion.span>
                           )}
                         </div>
                         <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1">
@@ -309,7 +466,7 @@ const LearnPage = () => {
                               fill="none"
                               className="text-slate-100 dark:text-slate-700"
                             />
-                            <circle
+                            <motion.circle
                               cx="28"
                               cy="28"
                               r="24"
@@ -317,8 +474,10 @@ const LearnPage = () => {
                               strokeWidth="4"
                               fill="none"
                               strokeLinecap="round"
-                              strokeDasharray={`${progress * 1.51} 151`}
-                              className="transition-all duration-500"
+                              initial={{ strokeDasharray: "0 151" }}
+                              whileInView={{ strokeDasharray: `${progress * 1.51} 151` }}
+                              viewport={{ once: true }}
+                              transition={{ delay: index * 0.1 + 0.3, duration: 0.8 }}
                             />
                             <defs>
                               <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -333,15 +492,17 @@ const LearnPage = () => {
                         </div>
 
                         {/* Action Button */}
-                        <button 
+                        <motion.button 
                           disabled={isLocked}
                           className={`px-5 py-2.5 rounded-xl font-semibold text-sm flex items-center gap-2 transition-all ${
                             isLocked
                               ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 cursor-not-allowed'
                               : isCompleted
                                 ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 hover:bg-green-200'
-                                : `bg-gradient-to-r ${module.gradient} text-white shadow-lg hover:shadow-xl hover:scale-105`
+                                : `bg-gradient-to-r ${module.gradient} text-white shadow-lg hover:shadow-xl`
                           }`}
+                          whileHover={!isLocked ? { scale: 1.05 } : {}}
+                          whileTap={!isLocked ? { scale: 0.95 } : {}}
                         >
                           {isLocked ? (
                             <>
@@ -360,28 +521,43 @@ const LearnPage = () => {
                               <Sparkles className="w-4 h-4" /> Start
                             </>
                           )}
-                        </button>
+                        </motion.button>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </motion.div>
+                </motion.div>
               );
             })}
           </div>
         </div>
 
-        {/* Motivation Banner */}
-        <div className="mt-12 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-2xl p-8 text-center text-white relative overflow-hidden">
-          <div className="absolute inset-0 opacity-10">
+        {/* Motivation Banner - Animated */}
+        <motion.div 
+          className="mt-12 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 rounded-2xl p-8 text-center text-white relative overflow-hidden"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={viewportOnce}
+          transition={{ duration: 0.5 }}
+        >
+          <motion.div 
+            className="absolute inset-0 opacity-10"
+            animate={{ rotate: [0, 5, 0] }}
+            transition={{ duration: 20, repeat: Infinity }}
+          >
             <div className="absolute top-4 left-10 text-6xl">🚀</div>
             <div className="absolute bottom-4 right-10 text-6xl">💡</div>
-          </div>
+          </motion.div>
           <h3 className="text-2xl font-bold mb-2 relative">Ready to become a C++ developer?</h3>
           <p className="text-blue-100 mb-4 relative">Complete all modules and start building real projects!</p>
-          <a href="/projects" className="inline-flex items-center gap-2 px-6 py-3 bg-white text-blue-600 rounded-xl font-semibold hover:bg-blue-50 transition-colors relative">
+          <motion.a 
+            href="/projects" 
+            className="inline-flex items-center gap-2 px-6 py-3 bg-white text-blue-600 rounded-xl font-semibold hover:bg-blue-50 transition-colors relative"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
             View Projects <ChevronRight className="w-4 h-4" />
-          </a>
-        </div>
+          </motion.a>
+        </motion.div>
       </div>
     </div>
   );

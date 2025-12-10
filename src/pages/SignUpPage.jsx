@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, Github, Chrome, User, Sparkles, Check, AlertCircle, CheckCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, User, Sparkles, Check, AlertCircle, CheckCircle } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 const SignUpPage = () => {
   const [formData, setFormData] = useState({
@@ -16,6 +17,10 @@ const SignUpPage = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [generalError, setGeneralError] = useState('');
+  
+  const { signup } = useAuth();
+  const navigate = useNavigate();
 
   // Validation rules
   const validateName = (name) => {
@@ -112,8 +117,9 @@ const SignUpPage = () => {
     );
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setGeneralError('');
     
     // Validate all fields
     const newErrors = {
@@ -131,11 +137,24 @@ const SignUpPage = () => {
     if (!agreeToTerms) return;
     
     setIsLoading(true);
-    // Simulate loading - server-side functionality to be added later
-    setTimeout(() => {
-      setIsLoading(false);
-      // Show success or redirect
-    }, 1500);
+    
+    try {
+      await signup(formData.email, formData.password, formData.name);
+      navigate('/learn'); // Redirect to learn page after signup
+    } catch (error) {
+      console.error("Failed to create account", error);
+      let message = "Failed to create account. Please try again.";
+      if (error.code === 'auth/email-already-in-use') {
+        message = "This email is already associated with an account.";
+      } else if (error.code === 'auth/invalid-email') {
+        message = "Invalid email address.";
+      } else if (error.code === 'auth/weak-password') {
+        message = "Password is too weak.";
+      }
+      setGeneralError(message);
+    }
+    
+    setIsLoading(false);
   };
 
   // Get input field styling based on validation state
@@ -240,35 +259,20 @@ const SignUpPage = () => {
               Start learning to code for free today
             </p>
           </div>
-
-          {/* Social Login Buttons */}
-          <div className="flex gap-3 mb-5">
-            <button 
-              type="button"
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-            >
-              <Chrome className="w-5 h-5 text-red-500" />
-              <span className="font-medium text-slate-700 dark:text-slate-300">Google</span>
-            </button>
-            <button 
-              type="button"
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-            >
-              <Github className="w-5 h-5 text-slate-900 dark:text-white" />
-              <span className="font-medium text-slate-700 dark:text-slate-300">GitHub</span>
-            </button>
-          </div>
-
-          {/* Divider */}
-          <div className="flex items-center gap-4 mb-5">
-            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-            <span className="text-sm text-slate-500">or</span>
-            <div className="flex-1 h-px bg-slate-200 dark:bg-slate-700" />
-          </div>
+          
+          {generalError && (
+             <motion.div 
+               initial={{ opacity: 0, y: -10 }}
+               animate={{ opacity: 1, y: 0 }}
+               className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-center gap-3 text-red-600 dark:text-red-400"
+             >
+               <AlertCircle className="w-5 h-5 flex-shrink-0" />
+               <span className="text-sm font-medium">{generalError}</span>
+             </motion.div>
+          )}
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-            {/* Name Field */}
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>            {/* Name Field */}
             <div>
               <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                 Full Name

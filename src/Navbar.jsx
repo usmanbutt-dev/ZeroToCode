@@ -1,12 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { updateStreak } from './utils/progress';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from './contexts/AuthContext';
+import { LogOut, User, Settings, ChevronDown } from 'lucide-react';
+import { GlassBot } from './components/avatars';
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [streak, setStreak] = useState(0);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    // Initialize from localStorage or system preference
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  
+  const { currentUser, userData, logout } = useAuth();
+  const navigate = useNavigate();
+  const profileRef = useRef(null);
+
+  // Get streak from Firebase userData
+  const streak = userData?.currentStreak || 0;
 
   // Handle scroll effect
   useEffect(() => {
@@ -17,20 +31,38 @@ const Navbar = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Handle dark mode
+  // Handle click outside for profile dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setIsProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Handle dark mode - apply on mount and change
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
     }
   }, [isDarkMode]);
 
-  // Initialize Streak
-  useEffect(() => {
-    const currentStreak = updateStreak();
-    setStreak(currentStreak);
-  }, []);
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/');
+      setIsProfileOpen(false);
+      setIsMobileMenuOpen(false);
+    } catch {
+      console.error("Failed to log out");
+    }
+  };
 
   const navLinks = [
     { name: 'Home', path: '/' },
@@ -39,6 +71,8 @@ const Navbar = () => {
     { name: 'Projects', path: '/projects' },
     { name: 'About', path: '/about' },
   ];
+
+
 
   return (
     <nav
@@ -64,16 +98,19 @@ const Navbar = () => {
                 key={link.name}
                 to={link.path}
                 className="text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 font-medium transition-colors"
+                title={link.name}
               >
                 {link.name}
               </Link>
             ))}
             
-            {/* Streak Counter */}
-            <div className="flex items-center gap-1.5 px-3 py-1 bg-orange-100 dark:bg-orange-900/30 rounded-full border border-orange-200 dark:border-orange-800/50" title="Current Streak">
-              <span className="text-lg">🔥</span>
-              <span className="font-bold text-orange-600 dark:text-orange-400 text-sm">{streak}</span>
-            </div>
+            {/* Streak Counter (Only if logged in) */}
+            {currentUser && (
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-orange-100 dark:bg-orange-900/30 rounded-full border border-orange-200 dark:border-orange-800/50" title="Current Streak">
+                <span className="text-lg">🔥</span>
+                <span className="font-bold text-orange-600 dark:text-orange-400 text-sm">{streak}</span>
+              </div>
+            )}
 
             {/* Dark Mode Toggle */}
             <button
@@ -92,27 +129,92 @@ const Navbar = () => {
               )}
             </button>
 
-            <Link 
-              to="/signin"
-              className="text-slate-600 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 font-medium transition-colors"
-            >
-              Sign In
-            </Link>
-            <Link 
-              to="/signup"
-              className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-5 py-2 rounded-full font-medium transition-all shadow-lg shadow-violet-500/30 hover:shadow-violet-500/40"
-            >
-              Sign Up
-            </Link>
+            {/* Auth Buttons or Profile */}
+            {!currentUser ? (
+              <div className="flex items-center gap-4">
+                <Link 
+                  to="/signin"
+                  className="text-slate-600 dark:text-slate-300 hover:text-violet-600 dark:hover:text-violet-400 font-medium transition-colors"
+                >
+                  Sign In
+                </Link>
+                <Link 
+                  to="/signup"
+                  className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-5 py-2 rounded-full font-medium transition-all shadow-lg shadow-violet-500/30 hover:shadow-violet-500/40"
+                >
+                  Sign Up
+                </Link>
+              </div>
+            ) : (
+              <div className="relative" ref={profileRef}>
+                <button 
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  className="flex items-center gap-2 p-1 pl-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors border border-slate-200 dark:border-slate-700"
+                >
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-200 max-w-[100px] truncate hidden xl:block">
+                    {currentUser.displayName || 'User'}
+                  </span>
+                  <div className="w-8 h-8 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center overflow-hidden">
+                    <GlassBot variant={userData?.avatar || 'standard'} size={32} animated={false} />
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${isProfileOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Dropdown Menu */}
+                {isProfileOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 py-1 overflow-hidden transform origin-top-right transition-all animate-in fade-in zoom-in-95 duration-200">
+                    <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                      <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
+                        {currentUser.displayName}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                        {currentUser.email}
+                      </p>
+                    </div>
+                    
+                    <div className="py-1">
+                      <Link 
+                        to="/profile" 
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                        onClick={() => setIsProfileOpen(false)}
+                      >
+                        <User className="w-4 h-4" />
+                        My Profile
+                      </Link>
+                      <Link 
+                        to="/settings" 
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                        onClick={() => setIsProfileOpen(false)}
+                      >
+                        <Settings className="w-4 h-4" />
+                        Settings
+                      </Link>
+                    </div>
+
+                    <div className="border-t border-slate-100 dark:border-slate-800 py-1">
+                      <button 
+                        onClick={handleLogout}
+                        className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Mobile Menu Button */}
           <div className="md:hidden flex items-center space-x-4">
-            {/* Mobile Streak */}
-            <div className="flex items-center gap-1 px-2 py-1 bg-orange-100 dark:bg-orange-900/30 rounded-full">
-              <span className="text-sm">🔥</span>
-              <span className="font-bold text-orange-600 dark:text-orange-400 text-xs">{streak}</span>
-            </div>
+            {/* Mobile Streak (Only if logged in) */}
+            {currentUser && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-orange-100 dark:bg-orange-900/30 rounded-full">
+                <span className="text-sm">🔥</span>
+                <span className="font-bold text-orange-600 dark:text-orange-400 text-xs">{streak}</span>
+              </div>
+            )}
 
              <button
               onClick={() => setIsDarkMode(!isDarkMode)}
@@ -148,6 +250,22 @@ const Navbar = () => {
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800">
           <div className="px-4 pt-2 pb-6 space-y-2">
+            
+            {/* Mobile Profile Info */}
+            {currentUser && (
+              <div className="py-2 border-b border-slate-100 dark:border-slate-800 mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-700 flex items-center justify-center overflow-hidden">
+                    <GlassBot variant={userData?.avatar || 'standard'} size={40} animated={false} />
+                  </div>
+                  <div>
+                    <p className="font-medium text-slate-900 dark:text-white">{currentUser.displayName}</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{currentUser.email}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {navLinks.map((link) => (
               <Link
                 key={link.name}
@@ -158,21 +276,33 @@ const Navbar = () => {
                 {link.name}
               </Link>
             ))}
+            
             <div className="pt-4 space-y-2">
-              <Link 
-                to="/signin"
-                className="block w-full text-center px-5 py-3 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium transition-all hover:bg-slate-50 dark:hover:bg-slate-800"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Sign In
-              </Link>
-              <Link 
-                to="/signup"
-                className="block w-full text-center bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-5 py-3 rounded-xl font-medium transition-all shadow-lg shadow-violet-500/30"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Sign Up
-              </Link>
+              {!currentUser ? (
+                <>
+                  <Link 
+                    to="/signin"
+                    className="block w-full text-center px-5 py-3 border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium transition-all hover:bg-slate-50 dark:hover:bg-slate-800"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Sign In
+                  </Link>
+                  <Link 
+                    to="/signup"
+                    className="block w-full text-center bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white px-5 py-3 rounded-xl font-medium transition-all shadow-lg shadow-violet-500/30"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    Sign Up
+                  </Link>
+                </>
+              ) : (
+                <button 
+                  onClick={handleLogout}
+                  className="block w-full text-center px-5 py-3 bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 rounded-xl font-medium transition-all hover:bg-red-100 dark:hover:bg-red-900/20"
+                >
+                  Sign Out
+                </button>
+              )}
             </div>
           </div>
         </div>
