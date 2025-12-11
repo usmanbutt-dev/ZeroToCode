@@ -87,7 +87,7 @@ const CppStringsVisualizer = () => {
               disabled={word.length === 0}
               className="flex-1 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-colors"
             >
-              Backspacce
+              Backspace
             </button>
             <button 
               onClick={clearWord}

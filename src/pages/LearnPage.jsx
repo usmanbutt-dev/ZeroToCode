@@ -253,7 +253,9 @@ const LearnPage = () => {
         </AnimatePresence>
         
         <div>
-          {activeModule?.component}
+          {activeModule?.component && React.cloneElement(activeModule.component, { 
+            onFinish: handleBack 
+          })}
         </div>
       </motion.div>
     );

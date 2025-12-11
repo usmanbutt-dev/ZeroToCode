@@ -1,34 +1,42 @@
 # ZeroToCode
 
-**ZeroToCode** is an interactive educational platform designed to teach absolute beginners the fundamentals of computer science, logic building, and C++ programming.
+**ZeroToCode** is a futuristic, interactive educational platform designed to teach absolute beginners the fundamentals of computer science, logic building, and C++ programming. It specifically targets visual learners by providing a "Glass Box" model of code execution, allowing users to see exactly what happens inside the computer as their code runs.
 
-## 🚀 Features
+## 🚀 Key Features
 
--   **Interactive Learning Modules**: Step-by-step lessons covering everything from hardware basics to pointers.
--   **Visualizers**: Interactive diagrams and animations to help visualize abstract concepts like memory, control flow, and call stacks.
--   **Progress Tracking**: Track your learning journey through different modules.
--   **Modern UI**: Built with React and Tailwind CSS, featuring a responsive design and dark mode support.
--   **Playground**: A dedicated space to experiment with code and visualize logic (Coming Soon).
+### 🖥️ Glass Box Visualizer
+The heart of the platform. Unlike standard IDEs, our visualizer runs C++ code entirely in the browser (client-side) and provides:
+-   **Real-time Memory Views**: See the Stack and Heap memory change as you step through code.
+-   **Variable Tracing**: Watch variables declare, initialize, and update in real-time.
+-   **Call Stack Visualization**: Understand function calls, scopes, and recursion deeply.
+-   **Interactive Debugging**: Step-by-step execution controls (Step In, Step Over, Step Out).
 
-## 📚 Curriculum
-
-The platform currently includes the following modules:
-
+### 🎓 Interactive Curriculum
+Structured modules designed to build a strong foundation:
 1.  **Computer Basics**: Hardware, Software, OS, Files.
 2.  **Logic Building**: Sequences, Flowcharts, Pseudocode.
 3.  **C++ Fundamentals**: Syntax, Variables, I/O.
 4.  **Control Flow**: If/Else, Switch, Loops.
-5.  **Functions**: Parameters, Return Values, Scope, Call Stack.
-6.  **Arrays**: 1D/2D Arrays, Memory Layout.
-7.  **Strings**: C-style strings, `std::string`, Operations.
-8.  **Pointers**: Memory Addresses, Dereferencing, Dynamic Memory.
+5.  **Functions**: Parameters, Return Values, Scope.
+6.  **Memory & Pointers**: Arrays, Strings, Address manipulation.
+
+### 👤 Profile & Personalization
+-   **Glass-Morphism Avatars**: Unique, procedurally generated robot avatars tailored to your profile.
+-   **Progress Tracking**: Save your learning progress, completed modules, and projects via Firebase integration.
+-   **Customizable Settings**: Dark mode, editor preferences, and more.
+
+### 🎮 Gamified Projects & Minigames
+-   Apply your knowledge by building real projects.
+-   Interactive mini-games to reinforce logic and coding concepts.
 
 ## 🛠️ Tech Stack
 
--   **Frontend Framework**: React (v18)
+-   **Frontend**: React (v18), React Router DOM
+-   **Styling**: Tailwind CSS, Framer Motion (for high-performance animations)
+-   **Code Editor**: Monaco Editor (VS Code core)
+-   **Runtime**: Custom Web Workers interacting with Emscripten/Clang for client-side C++ execution.
+-   **Backend & Auth**: Firebase (Authentication, Firestore)
 -   **Build Tool**: Vite
--   **Styling**: Tailwind CSS
--   **Routing**: React Router DOM
 
 ## 🏃‍♂️ Getting Started
 
@@ -43,17 +51,21 @@ The platform currently includes the following modules:
     npm install
     ```
 
-3.  **Run the development server**:
+3.  **Setup Environment**:
+    -   Create a `.env` file based on `.env.example`.
+    -   Add your Firebase configuration keys.
+
+4.  **Run the development server**:
     ```bash
     npm run dev
     ```
 
-4.  **Open your browser**:
+5.  **Open your browser**:
     Navigate to `http://localhost:5173` to view the app.
 
 ## 🤝 Contributing
 
-Contributions are welcome! If you have ideas for new modules, visualizers, or improvements, feel free to open an issue or submit a pull request.
+Contributions are welcome! If you have ideas for new visualizers, optimization for the runtime, or curriculum enhancements, feel free to open an issue or submit a pull request.
 
 ## 📄 License
 

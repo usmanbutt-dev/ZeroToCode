@@ -9,13 +9,25 @@ import LogicBuildingVisualizer from '../components/visualizers/LogicBuildingVisu
 import VisualizerEngine from '../components/visualizer/VisualizerEngine';
 
 const PlaygroundPage = () => {
-  const [code, setCode] = useState(`// Write your C++ code here
+  // Initial code state - prioritizes project code -> autosaved code -> default code
+  const [code, setCode] = useState(() => {
+    const projectCode = localStorage.getItem('playgroundCode');
+    if (projectCode) {
+      localStorage.removeItem('playgroundCode'); // Clear one-time transfer
+      return projectCode;
+    }
+    
+    const savedCode = localStorage.getItem('autosave_code');
+    if (savedCode) return savedCode;
+    
+    return `// Write your C++ code here
 #include <iostream>
 
 int main() {
   std::cout << "Hello, World!" << std::endl;
   return 0;
-}`);
+}`;
+  });
   const [output, setOutput] = useState('Click "Run" to see output...');
   const [isRunning, setIsRunning] = useState(false);
   const [fontSize, setFontSize] = useState(14);
@@ -36,22 +48,28 @@ int main() {
     fontLigatures: true
   });
 
-  // Input Handling
-  const [inputNeeded, setInputNeeded] = useState(false);
-  const [inputValue, setInputValue] = useState('');
-  const [pendingInput, setPendingInput] = useState(null);
+  // --- Input Protocol State ---
+  const [accumulatedInput, setAccumulatedInput] = useState('');
+  const [isWaitingForInput, setIsWaitingForInput] = useState(false);
+  const [lastInputValue, setLastInputValue] = useState('');
+  
+  // Check if code has cin (for UI hints only)
+  const [hasCin, setHasCin] = useState(false);
+  
+  // Separate console output from status messages
+  const [consoleOutput, setConsoleOutput] = useState('');
 
   const editorRef = useRef(null);
   const containerRef = useRef(null);
 
-  // Load code from localStorage (for Projects integration)
+  // Auto-save code changes (debounced)
   useEffect(() => {
-    const savedCode = localStorage.getItem('playgroundCode');
-    if (savedCode) {
-      setCode(savedCode);
-      localStorage.removeItem('playgroundCode'); // Clear after loading
-    }
-  }, []);
+    const timeoutId = setTimeout(() => {
+      localStorage.setItem('autosave_code', code);
+    }, 1000); // Save after 1 second of inactivity
+
+    return () => clearTimeout(timeoutId);
+  }, [code]);
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -94,6 +112,9 @@ int main() {
     } else {
       setActiveVisualizer(null);
     }
+    
+    // Detect cin usage
+    setHasCin(code.includes('cin'));
   }, [code]);
 
   // Drag Handling
@@ -154,15 +175,7 @@ int main() {
     element.click();
   };
 
-  const handleInputSubmit = (e) => {
-    e.preventDefault();
-    if (pendingInput) {
-      pendingInput(inputValue);
-      setInputValue('');
-      setInputNeeded(false);
-      setPendingInput(null);
-    }
-  };
+
 
   // Worker Reference
   const workerRef = useRef(null);
@@ -177,11 +190,18 @@ int main() {
       if (type === 'STATUS') {
         setOutput(prev => prev === 'Compiling...' ? payload : prev + '\n' + payload);
       } else if (type === 'OUTPUT') {
+        // Track console output separately
+        setConsoleOutput(payload);
         setOutput(prev => prev + '\n' + payload);
       } else if (type === 'TRACE') {
         console.log("--- PLAYGROUND: RECEIVED TRACE DATA ---\n", payload);
-        setTraceData(payload);
+        // Handle new payload structure: { traces, fullOutput }
+        setTraceData(payload.traces || payload);
+        setConsoleOutput(payload.fullOutput || '');
         setActiveTab('visualizer');
+      } else if (type === 'NEED_INPUT') {
+        setIsWaitingForInput(true);
+        // Do NOT set isRunning to false, we are "paused"
       } else if (type === 'ERROR') {
         setOutput(prev => prev + '\nError: ' + payload);
         setIsRunning(false);
@@ -203,18 +223,76 @@ int main() {
 
   const runCode = () => {
     setIsRunning(true);
+    setTraceData(null);
+    setConsoleOutput('');
     setOutput('Compiling...');
+    setAccumulatedInput(''); // Reset input history on fresh run
+    setIsWaitingForInput(false);
     
     if (workerRef.current) {
       workerRef.current.postMessage({ 
         type: 'COMPILE_AND_RUN', 
-        payload: { code, input: inputValue } 
+        payload: { 
+          code: code,
+          input: '' // Start with empty input
+        } 
       });
     }
   };
 
+  const handleInputSubmit = (e) => {
+    e.preventDefault();
+    const newInput = lastInputValue.trim();
+    
+    // Append new input to history with a newline
+    const newAccumulated = accumulatedInput + newInput + '\n';
+    setAccumulatedInput(newAccumulated);
+    setLastInputValue('');
+    setIsWaitingForInput(false);
+    
+    // RE-RUN with full input history
+    // This simulates "resuming" by re-executing everything with the new input available
+    if (workerRef.current) {
+        workerRef.current.terminate();
+    }
+    workerRef.current = new Worker(new URL('../workers/clang.worker.js', import.meta.url), { type: 'module' });
+    
+    // Re-attach listeners (duplicated code, ideal for refactoring but keeping inline for now)
+    workerRef.current.onmessage = (e) => {
+      const { type, payload } = e.data;
+      if (type === 'STATUS') {
+         // Ignore status on re-runs to avoid spam
+      } else if (type === 'OUTPUT') {
+        setConsoleOutput(payload);
+        setOutput(prev => prev + '\n' + payload);
+      } else if (type === 'TRACE') {
+        setTraceData(payload.traces || payload);
+        setConsoleOutput(payload.fullOutput || '');
+        setActiveTab('visualizer');
+      } else if (type === 'NEED_INPUT') {
+        setIsWaitingForInput(true);
+      } else if (type === 'ERROR') {
+        setOutput(prev => prev + '\nError: ' + payload);
+        setIsRunning(false);
+      } else if (type === 'FINISHED') {
+        setIsRunning(false);
+      }
+    };
+    
+    workerRef.current.postMessage({ 
+      type: 'COMPILE_AND_RUN', 
+      payload: { 
+        code: code,
+        input: newAccumulated
+      } 
+    });
+  };
+
   return (
     <div className="pt-16 h-screen flex flex-col bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
+      
+
+
       <SettingsModal 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)}
@@ -229,14 +307,14 @@ int main() {
           {/* Run Button */}
           <button 
             onClick={runCode}
-            disabled={isRunning && !inputNeeded}
+            disabled={isRunning && !isWaitingForInput}
             className={`px-4 py-1.5 rounded-lg font-semibold text-sm flex items-center gap-2 transition-all ${
-              isRunning && !inputNeeded
+              isRunning && !isWaitingForInput
                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
                 : 'bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/30'
             }`}
           >
-            {isRunning && !inputNeeded ? (
+            {isRunning && !isWaitingForInput ? (
               <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -244,8 +322,10 @@ int main() {
             ) : (
               <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" /></svg>
             )}
-            {isRunning ? (inputNeeded ? 'Waiting...' : 'Running...') : 'Run'}
+            {isRunning ? (isWaitingForInput ? 'Waiting...' : 'Running...') : 'Run'}
           </button>
+          
+
         </div>
 
         <div className="flex items-center gap-2">
@@ -397,7 +477,7 @@ int main() {
                 }`}
               >
                 <span>Smart Visualizer</span>
-                {traceData.length > 0 && (
+                {traceData && traceData.length > 0 && (
                   <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                 )}
               </button>
@@ -407,25 +487,36 @@ int main() {
             <div className="flex-1 overflow-hidden relative bg-slate-50 dark:bg-[#1e1e1e]">
               {activeTab === 'output' ? (
                 <div className="h-full flex flex-col">
+                  {/* Terminal Output Area */}
                   <div className="flex-1 p-4 font-mono text-sm text-slate-700 dark:text-slate-300 overflow-auto whitespace-pre-wrap">
-                    <div className="flex-1">{output}</div>
-                    {inputNeeded && (
-                      <form onSubmit={handleInputSubmit} className="mt-2 flex items-center gap-2 border-t border-slate-200 dark:border-slate-700 pt-2">
-                        <span className="text-green-500 font-bold">&gt;</span>
-                        <input
-                          type="text"
-                          value={inputValue}
-                          onChange={(e) => setInputValue(e.target.value)}
-                          className="flex-1 bg-transparent border-none outline-none text-slate-700 dark:text-slate-300 font-mono"
-                          placeholder="Type input here..."
-                          autoFocus
-                        />
-                      </form>
-                    )}
+                    <div className="flex-1">
+                      {output}
+                      {/* Integrated Terminal Input */}
+                      {isWaitingForInput && (
+                        <form onSubmit={handleInputSubmit} className="inline-block align-baseline ml-1">
+                          <input
+                            type="text"
+                            value={lastInputValue}
+                            onChange={(e) => setLastInputValue(e.target.value)}
+                            className="bg-transparent border-none outline-none text-slate-700 dark:text-slate-300 font-mono p-0 m-0 w-32 min-w-[20px] focus:ring-0"
+                            autoFocus
+                            ref={(input) => input && input.focus()}
+                          />
+                        </form>
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : (
-                <VisualizerEngine traceData={traceData} sourceCode={code} />
+                <VisualizerEngine 
+                  traceData={traceData} 
+                  sourceCode={code} 
+                  consoleOutput={consoleOutput}
+                  isWaitingForInput={isWaitingForInput}
+                  onInputSubmit={handleInputSubmit}
+                  inputValue={lastInputValue}
+                  onInputChange={setLastInputValue}
+                />
               )}
             </div>
           </div>

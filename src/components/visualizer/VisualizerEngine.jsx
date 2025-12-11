@@ -1,18 +1,34 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Pause, SkipBack, SkipForward, RefreshCw, Lock, ArrowRight, Layers, Code, Zap, Gauge, AlertTriangle, Database, Box, Grid3X3, Target, GripVertical, Maximize2, X, Minimize2 } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, RefreshCw, Lock, ArrowRight, Layers, Code, Zap, Gauge, AlertTriangle, Database, Box, Grid3X3, Target, GripVertical, Maximize2, X, Minimize2, ZoomIn, ZoomOut } from 'lucide-react';
+import Editor from '@monaco-editor/react';
 
-// Color palette for pointer connections
+// Color palette for pointer connections (expanded from 5 to 12)
 const POINTER_COLORS = [
   { bg: 'bg-purple-100 dark:bg-purple-900/40', border: 'border-purple-500', text: 'text-purple-600 dark:text-purple-400', dot: 'bg-purple-500' },
   { bg: 'bg-blue-100 dark:bg-blue-900/40', border: 'border-blue-500', text: 'text-blue-600 dark:text-blue-400', dot: 'bg-blue-500' },
   { bg: 'bg-green-100 dark:bg-green-900/40', border: 'border-green-500', text: 'text-green-600 dark:text-green-400', dot: 'bg-green-500' },
   { bg: 'bg-orange-100 dark:bg-orange-900/40', border: 'border-orange-500', text: 'text-orange-600 dark:text-orange-400', dot: 'bg-orange-500' },
   { bg: 'bg-pink-100 dark:bg-pink-900/40', border: 'border-pink-500', text: 'text-pink-600 dark:text-pink-400', dot: 'bg-pink-500' },
+  { bg: 'bg-cyan-100 dark:bg-cyan-900/40', border: 'border-cyan-500', text: 'text-cyan-600 dark:text-cyan-400', dot: 'bg-cyan-500' },
+  { bg: 'bg-rose-100 dark:bg-rose-900/40', border: 'border-rose-500', text: 'text-rose-600 dark:text-rose-400', dot: 'bg-rose-500' },
+  { bg: 'bg-amber-100 dark:bg-amber-900/40', border: 'border-amber-500', text: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' },
+  { bg: 'bg-teal-100 dark:bg-teal-900/40', border: 'border-teal-500', text: 'text-teal-600 dark:text-teal-400', dot: 'bg-teal-500' },
+  { bg: 'bg-indigo-100 dark:bg-indigo-900/40', border: 'border-indigo-500', text: 'text-indigo-600 dark:text-indigo-400', dot: 'bg-indigo-500' },
+  { bg: 'bg-lime-100 dark:bg-lime-900/40', border: 'border-lime-500', text: 'text-lime-600 dark:text-lime-400', dot: 'bg-lime-500' },
+  { bg: 'bg-fuchsia-100 dark:bg-fuchsia-900/40', border: 'border-fuchsia-500', text: 'text-fuchsia-600 dark:text-fuchsia-400', dot: 'bg-fuchsia-500' },
 ];
 
-const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
+const VisualizerEngine = ({ 
+  traceData, 
+  sourceCode = '', 
+  consoleOutput = '', 
+  isWaitingForInput, 
+  onInputSubmit, 
+  inputValue, 
+  onInputChange 
+}) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [stackFrames, setStackFrames] = useState([]);
@@ -36,10 +52,106 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
   const visualizerContentRef = useRef(null);
   const [scaleFactor, setScaleFactor] = useState(1);
   
+  // Zoom control for memory visualization
+  const [zoomLevel, setZoomLevel] = useState(100);
+  
+  // Monaco editor refs
+  const monacoEditorRef = useRef(null);
+  const monacoRef = useRef(null);
+  const decorationsRef = useRef([]);
+  
   // Fullscreen modal state
   const [isFullscreen, setIsFullscreen] = useState(false);
   const fullscreenContainerRef = useRef(null);
   const fullscreenContentRef = useRef(null);
+  
+  // Console output panel state
+  const [showConsole, setShowConsole] = useState(true);
+  
+  // Compute progressive output based on current step
+  // Shows only cout outputs that have occurred up to currentStep
+  const visibleOutput = React.useMemo(() => {
+    if (!consoleOutput || !traceData || traceData.length === 0) return '';
+    
+    // Find the last cout trace at or before currentStep
+    let lastCoutIndex = -1;
+    for (let i = 0; i <= currentStep && i < traceData.length; i++) {
+      if (traceData[i].type === 'cout') {
+        lastCoutIndex = i;
+      }
+    }
+    
+    // If no cout traces yet, show nothing
+    if (lastCoutIndex === -1) return '';
+    
+    // If we're at the end of the trace (or trace is complete), show full output
+    if (currentStep >= traceData.length - 1) {
+      return consoleOutput.trim();
+    }
+    
+    // Find the next cout trace AFTER currentStep
+    let nextCoutStartIndex = consoleOutput.length;
+    let foundNext = false;
+    
+    for (let i = currentStep + 1; i < traceData.length; i++) {
+        if (traceData[i].type === 'cout' && traceData[i].outputStartIndex !== undefined) {
+            nextCoutStartIndex = traceData[i].outputStartIndex;
+            foundNext = true;
+            break;
+        }
+    }
+    
+    // If we didn't find a "next" cout, it means we are safe to show everything remaining
+    if (!foundNext) {
+        return consoleOutput.trim();
+    }
+    
+    return consoleOutput.slice(0, nextCoutStartIndex).trim();
+  }, [consoleOutput, traceData, currentStep]);
+  
+  // Handle Monaco Editor mount
+  const handleEditorDidMount = (editor, monaco) => {
+    monacoEditorRef.current = editor;
+    monacoRef.current = monaco;
+    editor.updateOptions({
+      readOnly: true,
+      domReadOnly: true,
+      lineNumbers: 'on',
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      fontSize: 13,
+      fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
+      lineDecorationsWidth: 10,
+      renderLineHighlight: 'none',
+      padding: { top: 8, bottom: 8 },
+    });
+  };
+  
+  // Highlight active line in Monaco
+  useEffect(() => {
+    if (!monacoEditorRef.current || !monacoRef.current || !activeLine) return;
+    
+    const editor = monacoEditorRef.current;
+    const monaco = monacoRef.current;
+    
+    // Clear previous decorations
+    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, []);
+    
+    // Add new decoration for active line
+    decorationsRef.current = editor.deltaDecorations([], [
+      {
+        range: new monaco.Range(activeLine, 1, activeLine, 1),
+        options: {
+          isWholeLine: true,
+          className: 'active-line-highlight',
+          linesDecorationsClassName: 'active-line-gutter',
+        }
+      }
+    ]);
+    
+    // Scroll to active line
+    editor.revealLineInCenter(activeLine);
+  }, [activeLine]);
 
   // Handle resize drag
   useEffect(() => {
@@ -323,7 +435,9 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
           value: step.value, 
           type: step.type === 'const' ? 'constant' : step.type === 'reference' ? 'reference' : 'variable',
           line: step.line,
-          addr: varAddr
+          addr: varAddr,
+          dataType: step.dataType || '',
+          expr: step.expr || ''
         };
         currentValues[step.name] = step.value;
       }
@@ -560,7 +674,7 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
 
   return (
     <div ref={containerRef} className="flex h-full bg-slate-50 dark:bg-[#1e1e1e] overflow-hidden">
-      {/* Code Viewer */}
+      {/* Code Viewer with Monaco Editor */}
       <div 
         className="border-r border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden"
         style={{ width: `${splitPosition}%` }}
@@ -568,25 +682,51 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
         <div className="bg-slate-100 dark:bg-slate-800 px-4 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2">
           <Code className="w-4 h-4 text-slate-500" />
           <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Source Code</span>
+          {activeLine && (
+            <span className="ml-auto text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">
+              Line {activeLine}
+            </span>
+          )}
         </div>
-        <div className="flex-1 overflow-y-auto p-4 font-mono text-sm">
-          {codeLines.map((line, idx) => (
-            <div
-              key={idx}
-              className={`flex gap-2 px-2 py-0.5 rounded transition-colors ${
-                idx + 1 === activeLine 
-                  ? 'bg-blue-100 dark:bg-blue-900/30 border-l-4 border-blue-500' 
-                  : 'hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-            >
-              <span className={`w-8 text-right select-none ${idx + 1 === activeLine ? 'text-blue-600 font-bold' : 'text-slate-400'}`}>
-                {idx + 1}
-              </span>
-              <span className={idx + 1 === activeLine ? 'text-slate-900 dark:text-slate-100' : 'text-slate-600 dark:text-slate-400'}>
-                {line || ' '}
-              </span>
-            </div>
-          ))}
+        <div className="flex-1 overflow-hidden">
+          <style>{`
+            .active-line-highlight {
+              background-color: rgba(59, 130, 246, 0.15) !important;
+              border-left: 3px solid #3b82f6 !important;
+            }
+            .active-line-gutter {
+              background-color: #3b82f6;
+              width: 3px !important;
+              margin-left: 3px;
+            }
+          `}</style>
+          <Editor
+            height="100%"
+            defaultLanguage="cpp"
+            theme={document.documentElement.classList.contains('dark') ? 'vs-dark' : 'light'}
+            value={sourceCode}
+            onMount={handleEditorDidMount}
+            options={{
+              readOnly: true,
+              domReadOnly: true,
+              lineNumbers: 'on',
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              fontSize: 13,
+              fontFamily: 'JetBrains Mono, Fira Code, Consolas, monospace',
+              lineDecorationsWidth: 8,
+              renderLineHighlight: 'none',
+              padding: { top: 8, bottom: 8 },
+              wordWrap: 'off',
+              folding: false,
+              glyphMargin: false,
+              lineNumbersMinChars: 3,
+              scrollbar: {
+                verticalSliderSize: 6,
+                horizontalSliderSize: 6,
+              },
+            }}
+          />
         </div>
       </div>
 
@@ -617,24 +757,56 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
           </div>
         )}
 
-        {/* Visualizer Header with Expand Button */}
+        {/* Visualizer Header with Zoom Controls and Expand Button */}
         <div className="bg-slate-100 dark:bg-slate-800 px-4 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-slate-500" />
             <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Memory Visualization</span>
-            {scaleFactor < 1 && (
-              <span className="text-xs text-slate-400 bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded">
-                {Math.round(scaleFactor * 100)}%
-              </span>
-            )}
           </div>
-          <button
-            onClick={() => setIsFullscreen(true)}
-            className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
-            title="Expand to Fullscreen (F)"
-          >
-            <Maximize2 className="w-4 h-4 text-slate-500" />
-          </button>
+          
+          {/* Zoom Controls */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setZoomLevel(prev => Math.max(50, prev - 10))}
+              className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-40"
+              disabled={zoomLevel <= 50}
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-4 h-4 text-slate-500" />
+            </button>
+            <div className="flex items-center gap-1.5 bg-slate-200 dark:bg-slate-700 px-2 py-0.5 rounded">
+              <input
+                type="range"
+                min="50"
+                max="150"
+                step="10"
+                value={zoomLevel}
+                onChange={(e) => setZoomLevel(parseInt(e.target.value))}
+                className="w-16 h-1 accent-blue-600 cursor-pointer"
+              />
+              <span className="text-xs font-mono text-slate-600 dark:text-slate-400 w-8">
+                {zoomLevel}%
+              </span>
+            </div>
+            <button
+              onClick={() => setZoomLevel(prev => Math.min(150, prev + 10))}
+              className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors disabled:opacity-40"
+              disabled={zoomLevel >= 150}
+              title="Zoom In"
+            >
+              <ZoomIn className="w-4 h-4 text-slate-500" />
+            </button>
+            
+            <div className="w-px h-4 bg-slate-300 dark:bg-slate-600 mx-1" />
+            
+            <button
+              onClick={() => setIsFullscreen(true)}
+              className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+              title="Expand to Fullscreen (F)"
+            >
+              <Maximize2 className="w-4 h-4 text-slate-500" />
+            </button>
+          </div>
         </div>
 
         {/* Step Explanation */}
@@ -647,11 +819,12 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
           </div>
         )}
 
-        {/* Memory Visualization - Auto-scaling container */}
-        <div ref={visualizerContainerRef} className="flex-1 overflow-hidden p-4 relative">
+        {/* Memory Visualization - Zoomable container */}
+        <div ref={visualizerContainerRef} className="flex-1 overflow-auto p-4 relative">
           <div 
             ref={visualizerContentRef}
             className="flex flex-col gap-4 origin-top-left transition-transform duration-150"
+            style={{ transform: `scale(${zoomLevel / 100})` }}
           >
             
             {/* HEAP */}
@@ -747,9 +920,16 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
                               <span className="font-bold font-mono text-lg">{name}</span>
                               {data.type === 'constant' && <Lock className="w-3 h-3 text-red-500" />}
                             </div>
-                            <span className="text-[10px] uppercase tracking-wider text-slate-400 bg-slate-50 dark:bg-slate-700 px-1.5 py-0.5 rounded">
-                              {data.type}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              {data.dataType && (
+                                <span className="text-[10px] font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-1.5 py-0.5 rounded">
+                                  {data.dataType}
+                                </span>
+                              )}
+                              <span className="text-[10px] uppercase tracking-wider text-slate-400 bg-slate-50 dark:bg-slate-700 px-1.5 py-0.5 rounded">
+                                {data.type}
+                              </span>
+                            </div>
                           </div>
 
                           {data.type === 'array' ? (
@@ -800,8 +980,18 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
                               )}
                             </div>
                           ) : (
-                            <div className="font-mono text-xl font-bold text-slate-800 dark:text-slate-100">
-                              {data.value}
+                            <div className="flex flex-col gap-1">
+                              <div className="font-mono text-xl font-bold text-slate-800 dark:text-slate-100">
+                                {data.value}
+                              </div>
+                              {data.expr && (
+                                <div className="flex items-center gap-1 text-xs text-slate-400 truncate" title={data.expr}>
+                                  <span>←</span>
+                                  <code className="font-mono bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-slate-500 dark:text-slate-400 truncate max-w-[150px]">
+                                    {data.expr}
+                                  </code>
+                                </div>
+                              )}
                             </div>
                           )}
                         </motion.div>
@@ -813,6 +1003,46 @@ const VisualizerEngine = ({ traceData, sourceCode = '' }) => {
             </AnimatePresence>
           </div>
         </div>
+
+        {/* Console Output Panel */}
+        {consoleOutput && (
+          <div className="border-t border-slate-200 dark:border-slate-700">
+            <button 
+              onClick={() => setShowConsole(!showConsole)}
+              className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 flex items-center justify-between hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Console Output</span>
+              </div>
+              <svg className={`w-4 h-4 text-slate-400 transition-transform ${showConsole ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showConsole && (
+              <div className="max-h-32 overflow-auto bg-slate-900 px-4 py-2">
+                <pre className="font-mono text-sm text-green-400 whitespace-pre-wrap">
+                  {visibleOutput || (!isWaitingForInput && <span className="text-slate-500 italic">Output will appear as you step through cout statements...</span>)}
+                  {/* Integrated Terminal Input in Visualizer */}
+                  {isWaitingForInput && (
+                    <form onSubmit={onInputSubmit} className="inline-block align-baseline ml-1">
+                      <input
+                        type="text"
+                        value={inputValue}
+                        onChange={(e) => onInputChange(e.target.value)}
+                        className="bg-transparent border-none outline-none text-green-400 font-mono p-0 m-0 w-32 min-w-[20px] focus:ring-0"
+                        autoFocus
+                        ref={(input) => input && input.focus()}
+                      />
+                    </form>
+                  )}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Controls */}
         <div className="bg-white dark:bg-[#2d2d2d] p-3 rounded-t-xl shadow-lg border-t border-slate-200 dark:border-slate-700">

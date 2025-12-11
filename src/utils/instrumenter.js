@@ -1,54 +1,60 @@
 // Robust C++ Instrumenter for ZeroToCode Smart Visualizer
 // Handles: Loop variables, Pointer arithmetic, Multi-declarations, References, Nested scopes
-// NEW: Dynamic Memory (Heap), Structs, 2D Arrays, Block Scope, STL Containers
+// NEW: Dynamic Memory (Heap), Structs, 2D Arrays, Block Scope, Data Types, Source Expressions
 
 export const instrumentCode = (code) => {
   const lines = code.split('\n');
   let instrumentedLines = [];
   
-  // Trace Helper Header - Enhanced with Heap and Struct support
+  // Trace Helper Header - Enhanced with dataType and expression tracking
   const header = `#include <iostream>
 #include <string>
 #include <sstream>
 
 // ===== SMART VISUALIZER TRACE HELPERS =====
+// Enhanced with dataType and expr (source expression) parameters
 template <typename T>
-void __trace(const char* type, const char* name, T val, void* addr, int line) {
+void __trace(const char* type, const char* name, T val, void* addr, int line, const char* dataType = "", const char* expr = "") {
   std::cout << "TRACE::{" 
             << "\\"type\\":\\"" << type << "\\", "
             << "\\"name\\":\\"" << name << "\\", "
             << "\\"value\\":\\"" << val << "\\", "
             << "\\"addr\\":\\"" << addr << "\\", "
-            << "\\"line\\":" << line 
+            << "\\"line\\":" << line << ", "
+            << "\\"dataType\\":\\"" << dataType << "\\", "
+            << "\\"expr\\":\\"" << expr << "\\""
             << "}" << std::endl;
 }
 
 template <typename T>
-void __trace_ptr(const char* type, const char* name, T* val, void* addr, int line) {
+void __trace_ptr(const char* type, const char* name, T* val, void* addr, int line, const char* dataType = "", const char* expr = "") {
   std::cout << "TRACE::{" 
             << "\\"type\\":\\"" << type << "\\", "
             << "\\"name\\":\\"" << name << "\\", "
             << "\\"value\\":\\"" << (void*)val << "\\", "
             << "\\"addr\\":\\"" << addr << "\\", "
             << "\\"deref\\":\\"" << (val ? *val : 0) << "\\", "
-            << "\\"line\\":" << line 
+            << "\\"line\\":" << line << ", "
+            << "\\"dataType\\":\\"" << dataType << "\\", "
+            << "\\"expr\\":\\"" << expr << "\\""
             << "}" << std::endl;
 }
 
-// NEW: Heap allocation trace
+// Heap allocation trace
 template <typename T>
-void __trace_heap_alloc(const char* name, T* ptr, size_t count, int line) {
+void __trace_heap_alloc(const char* name, T* ptr, size_t count, int line, const char* dataType = "") {
   std::cout << "TRACE::{" 
             << "\\"type\\":\\"heap_alloc\\", "
             << "\\"name\\":\\"" << name << "\\", "
             << "\\"addr\\":\\"" << (void*)ptr << "\\", "
             << "\\"size\\":" << count << ", "
             << "\\"value\\":\\"" << (ptr ? *ptr : 0) << "\\", "
-            << "\\"line\\":" << line 
+            << "\\"line\\":" << line << ", "
+            << "\\"dataType\\":\\"" << dataType << "\\""
             << "}" << std::endl;
 }
 
-// NEW: Heap deallocation trace
+// Heap deallocation trace
 void __trace_heap_free(const char* name, void* ptr, int line) {
   std::cout << "TRACE::{" 
             << "\\"type\\":\\"heap_free\\", "
@@ -58,14 +64,15 @@ void __trace_heap_free(const char* name, void* ptr, int line) {
             << "}" << std::endl;
 }
 
-// NEW: Heap array allocation trace
+// Heap array allocation trace
 template <typename T>
-void __trace_heap_arr(const char* name, T* ptr, size_t count, int line) {
+void __trace_heap_arr(const char* name, T* ptr, size_t count, int line, const char* dataType = "") {
   std::cout << "TRACE::{" 
             << "\\"type\\":\\"heap_array\\", "
             << "\\"name\\":\\"" << name << "\\", "
             << "\\"addr\\":\\"" << (void*)ptr << "\\", "
             << "\\"size\\":" << count << ", "
+            << "\\"dataType\\":\\"" << dataType << "\\", "
             << "\\"value\\":\\"[";
   for (size_t i = 0; i < count; i++) {
     std::cout << ptr[i];
@@ -76,7 +83,7 @@ void __trace_heap_arr(const char* name, T* ptr, size_t count, int line) {
             << "}" << std::endl;
 }
 
-// NEW: Block scope enter/exit
+// Block scope enter/exit
 void __trace_scope(const char* action, const char* scopeType, int line) {
   std::cout << "TRACE::{" 
             << "\\"type\\":\\"scope\\", "
@@ -86,20 +93,22 @@ void __trace_scope(const char* action, const char* scopeType, int line) {
             << "}" << std::endl;
 }
 
-// NEW: Struct field trace
+// Struct field trace
 template <typename T>
-void __trace_field(const char* structName, const char* fieldName, T val, void* addr, int line) {
+void __trace_field(const char* structName, const char* fieldName, T val, void* addr, int line, const char* dataType = "", const char* expr = "") {
   std::cout << "TRACE::{" 
             << "\\"type\\":\\"field\\", "
             << "\\"struct\\":\\"" << structName << "\\", "
             << "\\"field\\":\\"" << fieldName << "\\", "
             << "\\"value\\":\\"" << val << "\\", "
             << "\\"addr\\":\\"" << addr << "\\", "
-            << "\\"line\\":" << line 
+            << "\\"line\\":" << line << ", "
+            << "\\"dataType\\":\\"" << dataType << "\\", "
+            << "\\"expr\\":\\"" << expr << "\\""
             << "}" << std::endl;
 }
 
-// NEW: Struct declaration trace
+// Struct declaration trace
 void __trace_struct(const char* name, const char* typeName, void* addr, int line) {
   std::cout << "TRACE::{" 
             << "\\"type\\":\\"struct\\", "
@@ -112,12 +121,13 @@ void __trace_struct(const char* name, const char* typeName, void* addr, int line
 
 // 2D Array trace
 template <typename T, size_t R, size_t C>
-void __trace_arr2d(const char* type, const char* name, T (&arr)[R][C], void* addr, int line) {
+void __trace_arr2d(const char* type, const char* name, T (&arr)[R][C], void* addr, int line, const char* dataType = "") {
   std::cout << "TRACE::{" 
             << "\\"type\\":\\"" << type << "\\", "
             << "\\"name\\":\\"" << name << "\\", "
             << "\\"rows\\":" << R << ", "
             << "\\"cols\\":" << C << ", "
+            << "\\"dataType\\":\\"" << dataType << "\\", "
             << "\\"value\\":\\"[";
   for (size_t i = 0; i < R; i++) {
     std::cout << "[";
@@ -134,11 +144,13 @@ void __trace_arr2d(const char* type, const char* name, T (&arr)[R][C], void* add
             << "}" << std::endl;
 }
 
+// 1D Array trace
 template <typename T, size_t N>
-void __trace_arr(const char* type, const char* name, T (&arr)[N], void* addr, int line) {
+void __trace_arr(const char* type, const char* name, T (&arr)[N], void* addr, int line, const char* dataType = "") {
   std::cout << "TRACE::{" 
             << "\\"type\\":\\"" << type << "\\", "
             << "\\"name\\":\\"" << name << "\\", "
+            << "\\"dataType\\":\\"" << dataType << "\\", "
             << "\\"value\\":\\"[";
   for (size_t i = 0; i < N; i++) {
     std::cout << arr[i];
@@ -181,6 +193,9 @@ void __trace_func(const char* name, const char* action, int line) {
   const structVars = new Map(); // Track struct variable instances: name -> typeName
   let scopeStack = []; // Track nested scopes for proper cleanup
   let braceDepth = 0; // Track brace nesting
+  
+  // NEW: Track declared variables with their types for assignments
+  const declaredVars = new Map(); // name -> { type: string, isPointer: boolean }
 
   lines.forEach((line, index) => {
     const trimmed = line.trim();
@@ -270,8 +285,11 @@ void __trace_func(const char* name, const char* action, int line) {
     // Pattern: for (int i = 0; i < 5; i++)
     const forLoopMatch = trimmed.match(/for\s*\(\s*(int|size_t|auto|unsigned)\s+(\w+)\s*=/);
     if (forLoopMatch) {
+      const loopType = forLoopMatch[1];
+      const loopVar = forLoopMatch[2];
       instrumentedLines.push(line);
-      pendingLoopVar = { name: forLoopMatch[2], line: lineNum };
+      pendingLoopVar = { name: loopVar, type: loopType, line: lineNum };
+      declaredVars.set(loopVar, { type: loopType, isPointer: false });
       waitingForLoopBody = true;
       scopeStack.push({ type: 'for', line: lineNum });
       braceDepth++;
@@ -281,8 +299,8 @@ void __trace_func(const char* name, const char* action, int line) {
 
     // If we're waiting for loop body and this is the first real statement
     if (pendingLoopVar && waitingForLoopBody && trimmed !== '{') {
-      // Inject trace BEFORE the original line
-      instrumentedLines.push(`__trace("var", "${pendingLoopVar.name}", ${pendingLoopVar.name}, (void*)&${pendingLoopVar.name}, ${lineNum});`);
+      // Inject trace BEFORE the original line with type info
+      instrumentedLines.push(`__trace("var", "${pendingLoopVar.name}", ${pendingLoopVar.name}, (void*)&${pendingLoopVar.name}, ${lineNum}, "${pendingLoopVar.type}", "");`);
       instrumentedLines.push(line);
       pendingLoopVar = null;
       waitingForLoopBody = false;
@@ -404,41 +422,70 @@ void __trace_func(const char* name, const char* action, int line) {
     }
 
     // === VARIABLE DECLARATION ===
-    // Pattern: int x = 10; or const int MAX = 100;
-    // Handles multiple: int x = 1, y = 2; (naive - splits on comma)
-    if (/^(const\s+)?(int|float|double|char|bool|string|std::string)\s+\w+\s*=/.test(trimmed)) {
+    // Pattern: int x = 10; or int x; or const int MAX = 100;
+    // Handles multiple: int x = 1, y = 2; or int x, y;
+    // Removed !trimmed.includes('(') to allow comments with parens
+    if (/^(const\s+)?(int|float|double|char|bool|string|std::string)\s+\w+/.test(trimmed)) {
       const isConst = trimmed.startsWith('const');
-      const baseMatch = trimmed.match(/^(const\s+)?(int|float|double|char|bool|string|std::string)\s+(\w+)\s*=/);
+      // Updated regex to make assignment optional and allow trailing comments
+      // Matches: type name [= value]; ...
+      const baseMatch = trimmed.match(/^(const\s+)?(int|float|double|char|bool|string|std::string)\s+(\w+)(\s*=\s*([^;]+))?;/);
+      
       if (baseMatch) {
+        const dataType = baseMatch[2];
         const name = baseMatch[3];
-        instrumentedLines.push(`__trace("${isConst ? 'const' : 'var'}", "${name}", ${name}, (void*)&${name}, ${lineNum});`);
+        const hasInit = !!baseMatch[4];
+        const expr = hasInit ? baseMatch[5].trim() : "";
         
-        // Check for multiple declarations (e.g., int x = 1, y = 2;)
-        const multiMatch = trimmed.match(/,\s*(\w+)\s*=\s*([^,;]+)/g);
-        if (multiMatch) {
-          multiMatch.forEach(part => {
-            const varMatch = part.match(/,\s*(\w+)\s*=/);
-            if (varMatch) {
-              const additionalName = varMatch[1];
-              instrumentedLines.push(`__trace("${isConst ? 'const' : 'var'}", "${additionalName}", ${additionalName}, (void*)&${additionalName}, ${lineNum});`);
-            }
-          });
+        // Track the variable for later assignments
+        declaredVars.set(name, { type: dataType, isPointer: false });
+        
+        // Escape quotes in expression for C++ string
+        const escapedExpr = expr.replace(/"/g, '\\"');
+        
+        // Trace declaration immediately
+        instrumentedLines.push(`__trace("${isConst ? 'const' : 'var'}", "${name}", ${name}, (void*)&${name}, ${lineNum}, "${dataType}", "${escapedExpr}");`);
+        
+        // Check for multiple declarations (e.g., int x = 1, y = 2; or int x, y;)
+        // We look for commas followed by a variable name
+        const multiParts = trimmed.split(',');
+        if (multiParts.length > 1) {
+             // Skip the first part which is already handled above "int x"
+             for(let i=1; i < multiParts.length; i++) {
+                 // Clean up the part: " y = 2;" or " y;"
+                 const part = multiParts[i].trim();
+                 // Extract name and optional init
+                 const partMatch = part.match(/^(\w+)(\s*=\s*([^,;]+))?/);
+                 if (partMatch) {
+                     const additionalName = partMatch[1];
+                     const additionalExpr = partMatch[3] ? partMatch[3].trim().replace(/"/g, '\\"') : "";
+                     declaredVars.set(additionalName, { type: dataType, isPointer: false });
+                     instrumentedLines.push(`__trace("${isConst ? 'const' : 'var'}", "${additionalName}", ${additionalName}, (void*)&${additionalName}, ${lineNum}, "${dataType}", "${additionalExpr}");`);
+                 }
+             }
         }
         return;
       }
     }
 
     // === VARIABLE ASSIGNMENT ===
-    // Pattern: x = 10; or ptr = &arr[0];
-    // Excludes array access (x[i] = ...) and struct fields (x.y = ...)
-    if (/^\w+\s*=\s*[^;]+;/.test(trimmed) && !trimmed.includes('[') && !trimmed.includes('.')) {
-      const match = trimmed.match(/^(\w+)\s*=/);
-      if (match) {
-        const name = match[1];
+    // Pattern: x = 10; or sum = sum + arr[i]; or ptr = &arr[0];
+    // Only excludes when LHS has array access (x[i] = ...) or struct field (x.y = ...)
+    const simpleAssignMatch = trimmed.match(/^(\w+)\s*=\s*([^;]+);/);
+    if (simpleAssignMatch) {
+      const name = simpleAssignMatch[1];
+      const expr = simpleAssignMatch[2].trim();
+      // Only exclude if LHS itself is array access or field access
+      // RHS can contain anything (including arr[i])
+      if (!trimmed.match(/^\w+\s*\[/) && !trimmed.match(/^\w+\s*\./)) {
+        // Look up type from declaredVars
+        const varInfo = declaredVars.get(name);
+        const dataType = varInfo ? varInfo.type : '';
+        const escapedExpr = expr.replace(/"/g, '\\"');
         if (pointerVars.has(name)) {
-          instrumentedLines.push(`__trace_ptr("pointer", "${name}", ${name}, (void*)&${name}, ${lineNum});`);
+          instrumentedLines.push(`__trace_ptr("pointer", "${name}", ${name}, (void*)&${name}, ${lineNum}, "${dataType}*", "${escapedExpr}");`);
         } else {
-          instrumentedLines.push(`__trace("assign", "${name}", ${name}, (void*)&${name}, ${lineNum});`);
+          instrumentedLines.push(`__trace("assign", "${name}", ${name}, (void*)&${name}, ${lineNum}, "${dataType}", "${escapedExpr}");`);
         }
         return;
       }
@@ -450,7 +497,8 @@ void __trace_func(const char* name, const char* action, int line) {
     if (arrAssignMatch) {
       const arrName = arrAssignMatch[1];
       const indexExpr = arrAssignMatch[2];
-      instrumentedLines.push(`__trace("array_set", (std::string("${arrName}[") + std::to_string(${indexExpr}) + "]").c_str(), ${arrName}[${indexExpr}], (void*)&${arrName}[${indexExpr}], ${lineNum});`);
+      const valueExpr = arrAssignMatch[3].trim().replace(/"/g, '\\"');
+      instrumentedLines.push(`__trace("array_set", (std::string("${arrName}[") + std::to_string(${indexExpr}) + "]").c_str(), ${arrName}[${indexExpr}], (void*)&${arrName}[${indexExpr}], ${lineNum}, "", "${valueExpr}");`);
       return;
     }
 
@@ -458,34 +506,67 @@ void __trace_func(const char* name, const char* action, int line) {
     // Pattern: i++, ++i, ptr++, i--, etc.
     const incDecMatch = trimmed.match(/^(\w+)(\+\+|--)\s*;?$/) || trimmed.match(/^(\+\+|--)(\w+)\s*;?$/);
     if (incDecMatch) {
-      const name = incDecMatch[1] === '++' || incDecMatch[1] === '--' ? incDecMatch[2] : incDecMatch[1];
-      if (pointerVars.has(name)) {
-        instrumentedLines.push(`__trace_ptr("pointer", "${name}", ${name}, (void*)&${name}, ${lineNum});`);
+      let name, op;
+      if (incDecMatch[1] === '++' || incDecMatch[1] === '--') {
+        op = incDecMatch[1];
+        name = incDecMatch[2];
       } else {
-        instrumentedLines.push(`__trace("assign", "${name}", ${name}, (void*)&${name}, ${lineNum});`);
+        name = incDecMatch[1];
+        op = incDecMatch[2];
+      }
+      const varInfo = declaredVars.get(name);
+      const dataType = varInfo ? varInfo.type : '';
+      const exprShown = `${name}${op}`;
+      if (pointerVars.has(name)) {
+        instrumentedLines.push(`__trace_ptr("pointer", "${name}", ${name}, (void*)&${name}, ${lineNum}, "${dataType}*", "${exprShown}");`);
+      } else {
+        instrumentedLines.push(`__trace("assign", "${name}", ${name}, (void*)&${name}, ${lineNum}, "${dataType}", "${exprShown}");`);
       }
       return;
     }
 
     // === COMPOUND ASSIGNMENT ===
-    // Pattern: ptr += 2; x *= 3; etc.
-    if (/^\w+\s*(\+=|-=|\*=|\/=)\s*[^;]+;/.test(trimmed)) {
-      const match = trimmed.match(/^(\w+)\s*(\+=|-=|\*=|\/=)/);
-      if (match) {
-        const name = match[1];
-        if (pointerVars.has(name)) {
-          instrumentedLines.push(`__trace_ptr("pointer", "${name}", ${name}, (void*)&${name}, ${lineNum});`);
-        } else {
-          instrumentedLines.push(`__trace("assign", "${name}", ${name}, (void*)&${name}, ${lineNum});`);
-        }
-        return;
+    // Pattern: sum += arr[i]; x *= 3; ptr += 2; etc.
+    // Allow compound assignments even when RHS has array access
+    const compoundMatch = trimmed.match(/^(\w+)\s*(\+=|-=|\*=|\/=|%=)\s*([^;]+);/);
+    if (compoundMatch) {
+      const name = compoundMatch[1];
+      const op = compoundMatch[2];
+      const rhs = compoundMatch[3].trim();
+      const fullExpr = `${name} ${op} ${rhs}`.replace(/"/g, '\\"');
+      const varInfo = declaredVars.get(name);
+      const dataType = varInfo ? varInfo.type : '';
+      if (pointerVars.has(name)) {
+        instrumentedLines.push(`__trace_ptr("pointer", "${name}", ${name}, (void*)&${name}, ${lineNum}, "${dataType}*", "${fullExpr}");`);
+      } else {
+        instrumentedLines.push(`__trace("assign", "${name}", ${name}, (void*)&${name}, ${lineNum}, "${dataType}", "${fullExpr}");`);
       }
+      return;
     }
 
-    // === GENERAL STEP TRACE ===
-    // For lines with significant statements (cout, cin, etc.)
+    // === COUT/CIN OUTPUT TRACE ===
+    // Trace before cout/cin so output appears after this trace event
     if (trimmed.includes('cout') || trimmed.includes('cin')) {
-      instrumentedLines.push(`__trace_step(${lineNum});`);
+      // Insert trace BEFORE the cout line (important for ordering)
+      const lastLine = instrumentedLines.pop(); // Remove the line we just added
+      instrumentedLines.push(`__trace("cout", "", "", nullptr, ${lineNum}, "", "");`);
+      instrumentedLines.push(lastLine); // Re-add the original line
+      
+      // NEW: Capture CIN input into variables
+      // Pattern: cin >> x; or std::cin >> x;
+      // Also handles chained: cin >> x >> y;
+      if (trimmed.includes('cin')) {
+         // Use global regex to match all occurrences of >> var
+         const extractVarsRegex = />>\s*(\w+)/g;
+         let match;
+         while ((match = extractVarsRegex.exec(trimmed)) !== null) {
+             const varName = match[1];
+             const varInfo = declaredVars.get(varName);
+             const dataType = varInfo ? varInfo.type : '';
+             // Trace ASSIGNMENT *after* the cin line executes
+             instrumentedLines.push(`__trace("assign", "${varName}", ${varName}, (void*)&${varName}, ${lineNum}, "${dataType}", "cin >> ${varName}");`);
+         }
+      }
     }
   });
 

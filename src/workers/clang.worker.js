@@ -43,6 +43,10 @@ self.onmessage = async (e) => {
       let memory = null;
       let outputBuffer = "";
       let traceBuffer = [];
+      
+      // Pre-input support for cin
+      let inputBuffer = (input || '') + '\n'; // Add newline to ensure cin reads properly
+      let inputPos = 0;
 
       // Helper to get memory as DataView
       const getMemory = () => new DataView(memory.buffer);
@@ -62,25 +66,49 @@ self.onmessage = async (e) => {
                 const chunk = new Uint8Array(memory.buffer, ptr, len);
                 const text = new TextDecoder().decode(chunk);
                 
-                // Check for TRACE:: lines
-                if (text.includes('TRACE::')) {
-                   const lines = text.split('\n');
-                   lines.forEach(line => {
-                     if (line.startsWith('TRACE::')) {
-                       try {
-                         const jsonStr = line.replace('TRACE::', '');
-                         traceBuffer.push(JSON.parse(jsonStr));
-                       } catch (e) {
-                         console.error("Failed to parse trace:", line);
-                       }
-                     } else if (line.trim().length > 0) {
-                       // Only add non-empty lines to output
-                       outputBuffer += line + '\n';
-                     }
-                   });
-                } else {
-                   outputBuffer += text;
-                }
+                // Always split by newlines and process each line
+                const lines = text.split('\n');
+                lines.forEach(line => {
+                  const traceIdx = line.indexOf('TRACE::');
+                  
+                  if (traceIdx !== -1) {
+                    // Found a trace on this line
+                    
+                    // 1. Handle content BEFORE trace (if any)
+                    if (traceIdx > 0) {
+                      const preTraceContent = line.substring(0, traceIdx);
+                      // Only add if it has visual content
+                      if (preTraceContent.trim().length > 0) {
+                         outputBuffer += preTraceContent;
+                         // Add newline only if the original line didn't end with one? 
+                         // The split('\n') eats the newline.
+                         // But for terminal display, having it on separate lines usually ensures clarity.
+                         // However, "Enter x: " should ideally stay without newline if we want "10" to appear next to it?
+                         // But the visualizer console is line-based (pre tag).
+                         outputBuffer += '\n'; 
+                      }
+                    }
+
+                    // 2. Parse the trace part
+                    const tracePart = line.substring(traceIdx);
+                    try {
+                      const jsonStr = tracePart.replace('TRACE::', '');
+                      const traceEvent = JSON.parse(jsonStr);
+                      
+                      // For cout traces, mark the trace index for output association
+                      if (traceEvent.type === 'cout') {
+                        traceEvent.outputStartIndex = outputBuffer.length;
+                      }
+                      
+                      traceBuffer.push(traceEvent);
+                    } catch (e) {
+                      console.error("Failed to parse trace:", line);
+                    }
+                  } else if (line.trim().length > 0) {
+                    // Only add non-empty, non-trace lines to output
+                    outputBuffer += line + '\n';
+                  }
+                });
                 
                 written += len;
               }
@@ -90,15 +118,43 @@ self.onmessage = async (e) => {
             return 0;
           },
 
-          // File Descriptor Read (stdin)
+          // File Descriptor Read (stdin) - Now uses pre-provided input
           fd_read: (fd, iovs, iovs_len, nread) => {
-            if (fd === 0) {
-              getMemory().setUint32(nread, 0, true); // EOF
+            if (fd === 0) { // stdin
+              const view = getMemory();
+              let totalBytesRead = 0;
+              
+              const availableBytes = inputBuffer.length - inputPos;
+
+              // Check if we need more input (and we haven't reached natural EOF)
+              // We assume if the program asks for input and we have none left, it's an interactive prompt
+              if (availableBytes <= 0) {
+                 // Signal that we need input
+                 throw new Error("__WASI_NEED_INPUT__");
+              }
+
+              for (let i = 0; i < iovs_len && inputPos < inputBuffer.length; i++) {
+                const ptr = view.getUint32(iovs + i * 8, true);
+                const len = view.getUint32(iovs + i * 8 + 4, true);
+                const currentAvailable = inputBuffer.length - inputPos;
+                const bytesToRead = Math.min(len, currentAvailable);
+                
+                if (bytesToRead > 0) {
+                  const inputSlice = inputBuffer.slice(inputPos, inputPos + bytesToRead);
+                  const bytes = new TextEncoder().encode(inputSlice);
+                  new Uint8Array(memory.buffer, ptr, bytesToRead).set(bytes);
+                  inputPos += bytesToRead;
+                  totalBytesRead += bytesToRead;
+                }
+              }
+              
+              view.setUint32(nread, totalBytesRead, true);
               return 0;
             }
             return 0;
           },
-
+          
+          // ... (rest of imports)
           // File Descriptor Seek
           fd_seek: (fd, offset, whence, newOffset) => 70, // ENOSYS
 
@@ -187,6 +243,27 @@ self.onmessage = async (e) => {
         // Check if it's a normal exit
         if (e.message && e.message.startsWith("__WASI_EXIT__")) {
           // Normal exit, proceed
+        } else if (e.message === "__WASI_NEED_INPUT__") {
+           // PARTIAL EXECUTION: We need input
+           // Send whatever output/trace we have so far
+           
+           self.postMessage({ 
+            type: 'OUTPUT', 
+            payload: outputBuffer.trim() || "" 
+           });
+
+           if (traceBuffer.length > 0) {
+             self.postMessage({ 
+               type: 'TRACE', 
+               payload: { 
+                 traces: traceBuffer, 
+                 fullOutput: outputBuffer.trim() 
+               }
+             });
+           }
+           
+           self.postMessage({ type: 'NEED_INPUT' });
+           return; // Stop execution here
         } else {
           throw e;
         }
@@ -194,13 +271,19 @@ self.onmessage = async (e) => {
 
       self.postMessage({ 
         type: 'OUTPUT', 
-        payload: outputBuffer || "Program finished with no output." 
+        payload: outputBuffer.trim() || "Program finished with no output." 
       });
       
-      // Send Trace Data
+      // Send Trace Data with full output for progressive display
       if (traceBuffer.length > 0) {
         console.log("--- WORKER TRACE BUFFER ---\n", traceBuffer);
-        self.postMessage({ type: 'TRACE', payload: traceBuffer });
+        self.postMessage({ 
+          type: 'TRACE', 
+          payload: { 
+            traces: traceBuffer, 
+            fullOutput: outputBuffer.trim() 
+          }
+        });
       } else {
         console.log("--- WORKER: NO TRACE DATA CAPTURED ---");
       }
